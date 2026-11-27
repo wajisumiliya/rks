@@ -666,8 +666,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 alignment: Alignment.centerLeft,
                                 child: Image.asset(
                                   'assets/hasani_books_logo.jpg',
-                                  width: 88,
-                                  height: 58,
+                                  width: 210,
+                                    height: 48,
+                                    semanticLabel: 'RK Success',
                                   fit: BoxFit.contain,
                                 ),
                               ),
