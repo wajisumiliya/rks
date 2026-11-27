@@ -66,6 +66,10 @@ node_modules/
 *.dump
 *.sql
 !supabase/migrations/*.sql
+!backend/migrations/*.sql
+!backend/test/fixtures/neon-schema.sql
+!backend/test/fixtures/protect-locked-payroll.sql
+!setup/bootstrap.sql
 *.backup
 *.bak
 

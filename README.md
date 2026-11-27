@@ -26,6 +26,7 @@ The script applies one company profile to source labels and shared logo files. R
    ```sh
    cd backend
    npm ci
+   npm run db:generate
    npm start
    ```
 
