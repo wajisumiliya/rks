@@ -7489,6 +7489,14 @@ class _AdminDashboardState extends State<AdminDashboard>
         employee['is_other_staff']?.toString().toLowerCase() == 'true';
     String payrollBranchId =
         _normalizeBranchValue(employee['payroll_branch_id']);
+    final payrollBranches = <String, String>{};
+    for (final branch in service.branches) {
+      final id = _normalizeBranchValue(branch.id);
+      if (id.isNotEmpty) payrollBranches.putIfAbsent(id, () => branch.name);
+    }
+    if (payrollBranchId.isNotEmpty) {
+      payrollBranches.putIfAbsent(payrollBranchId, () => payrollBranchId);
+    }
     var saving = false;
     Widget sectionHeading(IconData icon, String title, String subtitle) =>
         Padding(
@@ -7797,10 +7805,10 @@ class _AdminDashboardState extends State<AdminDashboard>
                         value: '',
                         child: Text('Same as attendance branch'),
                       ),
-                      ...service.branches.map(
+                      ...payrollBranches.entries.map(
                         (branch) => DropdownMenuItem<String>(
-                          value: _normalizeBranchValue(branch.id),
-                          child: Text(branch.name),
+                          value: branch.key,
+                          child: Text(branch.value),
                         ),
                       ),
                     ],
