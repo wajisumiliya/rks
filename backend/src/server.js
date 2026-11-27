@@ -34,9 +34,6 @@ import { ensureApplicationSchema, startPayslipReleaseWorker } from "./applicatio
 import { installNotificationApi } from "./notification-api.js";
 import { startBirthdayWishWorker } from "./birthday-wishes.js";
 import { startAnniversaryWishWorker } from "./anniversary-wishes.js";
-import { installPenguinPetApi } from "./penguin-pet-api.js";
-import { installMysteryEggApi } from "./mystery-eggs.js";
-import { startMysteryEggReminderWorker } from "./mystery-egg-reminder.js";
 import { buildAttendanceUpserts, withCanonicalBranchId } from "./attendance-batch.js";
 import {
   ensureAdminAccount,
@@ -4328,8 +4325,6 @@ installSalaryReportApi(app, { pool, authenticate });
 installEmployeeWelfareApi(app, { pool, authenticate });
 installSalaryReportAssignmentsApi(app, { pool, authenticate });
 installSalaryReportTemporaryApi(app, { pool, authenticate });
-installPenguinPetApi(app, { pool, authenticate });
-installMysteryEggApi(app, { pool });
 
 app.get('/api/admin/users', authenticate, requireAdmin, async (req,res) => {
   try {
@@ -4475,7 +4470,6 @@ async function startServer() {
   startPayslipReleaseWorker(pool);
   startBirthdayWishWorker(pool);
   startAnniversaryWishWorker(pool);
-  startMysteryEggReminderWorker(pool);
   const hashPassword = (password) => bcrypt.hash(password, 12);
   await ensureAdminAccount(pool, {
     email: process.env.ADMIN_EMAIL,

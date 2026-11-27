@@ -20,26 +20,15 @@ class LoginHabitatScene {
 
 LoginHabitatScene loginHabitatScene({
   required DateTime instant,
-  DateTime? hatchAt,
-  bool hatchConfirmed = false,
   int? previewWeekday,
 }) {
   final local = malaysiaTime(instant);
-  var period = local.hour < 6 || local.hour >= 20
+  final period = local.hour < 6 || local.hour >= 20
       ? 'night'
       : local.hour < 12
           ? 'morning'
           : local.hour < 17
               ? 'afternoon'
               : 'evening';
-  if (hatchConfirmed && hatchAt != null && !instant.isBefore(hatchAt)) {
-    final revealDay = malaysiaTime(hatchAt);
-    if (local.year == revealDay.year &&
-        local.month == revealDay.month &&
-        local.day == revealDay.day &&
-        local.hour < 20) {
-      period = 'evening';
-    }
-  }
   return LoginHabitatScene(previewWeekday ?? local.weekday, period);
 }

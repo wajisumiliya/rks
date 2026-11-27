@@ -48,7 +48,6 @@ test('employee ID maintenance preserves linked history and restores schema guard
     await client.query(`INSERT INTO attendance(employee_id,branch_id,attendance_date,check_in,check_out,status)
       VALUES($1,'A','2026-10-01','09:10','18:00','Late')`,[oldId]);
     await client.query(`INSERT INTO employee_requests(branch_id,name,assigned_employee_id) VALUES('A','Fixture request',$1)`,[oldId]);
-    await client.query(`INSERT INTO app_private.employee_penguin_pets(employee_id,nickname) VALUES($1,'Keep nickname')`,[oldId]);
     await client.query(`INSERT INTO app_private.employee_photos(employee_id,content_type,photo_bytes) VALUES($1,'image/png',decode('89504e47','hex'))`,[oldId]);
     const event={date:'2026-10-01',type:'arrival',minutes:10,scheduled:'09:00:00',actual:'09:10'};
     const fingerprint=hash({branch_id:'A',employee_id:oldId,...event});
@@ -84,7 +83,7 @@ test('employee ID maintenance preserves linked history and restores schema guard
       assert.equal((await client.query('SELECT count(*)::int AS n FROM employees WHERE employee_id=$1',[newId])).rows[0].n,1);
       assert.deepEqual((await client.query('SELECT to_jsonb(p)-\'employee_id\' AS row FROM payroll p ORDER BY id')).rows,oldPayroll);
       assert.deepEqual((await client.query('SELECT to_jsonb(d)-\'employee_id\' AS row FROM employee_salary_defaults d')).rows,oldDefaults);
-      for(const table of ['payroll_increment_state','employee_mc_openings','employee_photos','employee_penguin_pets']) {
+      for(const table of ['payroll_increment_state','employee_mc_openings','employee_photos']) {
         assert.ok((await client.query(`SELECT count(*)::int AS n FROM app_private.${table} WHERE employee_id=$1`,[newId])).rows[0].n>0,table);
       }
       assert.equal((await client.query('SELECT assigned_employee_id FROM employee_requests')).rows[0].assigned_employee_id,newId);

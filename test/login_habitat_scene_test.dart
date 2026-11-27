@@ -1,8 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:hasani_payroll_portal/services/mystery_egg_hatch_controller.dart';
-import 'package:hasani_payroll_portal/widgets/mystery_egg_teaser.dart';
 import 'package:hasani_payroll_portal/services/login_habitat_scene.dart';
 
 void main() {
@@ -16,33 +13,6 @@ void main() {
         expect(data.getUint32(0), 0x89504e47); // PNG signature
       }
     }
-  });
-
-  testWidgets(
-      'server hatch confirmation changes the background selection immediately',
-      (tester) async {
-    final hatch = DateTime.parse('2026-10-23T07:39:11Z');
-    var now = hatch.subtract(const Duration(seconds: 5));
-    final controller = MysteryEggHatchController(
-        load: () async => {
-              'hatchAt': hatch.toIso8601String(),
-              'serverNow': now.toIso8601String(),
-              'stage': now.isBefore(hatch) ? 'egg' : 'chick',
-            });
-    await tester.pumpWidget(
-        MaterialApp(home: MysteryEggTeaser(controller: controller)));
-    await tester.pump();
-    LoginHabitatScene scene() => loginHabitatScene(
-          instant: controller.serverNow!,
-          hatchAt: controller.hatchAt,
-          hatchConfirmed: controller.stage != 'egg',
-        );
-    expect(scene().asset, 'assets/login_habitats/friday_afternoon.png');
-    now = hatch;
-    await controller.refresh();
-    expect(scene().asset, 'assets/login_habitats/friday_evening.png');
-    await tester.pumpWidget(const SizedBox.shrink());
-    controller.dispose();
   });
 
   test(
@@ -67,25 +37,6 @@ void main() {
         loginHabitatScene(instant: DateTime.parse('2026-10-23T16:00:00Z'))
             .weekday,
         DateTime.saturday);
-  });
-
-  test(
-      'reveal day starts evening only when the hatch is confirmed; night starts at 8 PM',
-      () {
-    final hatch = DateTime.parse('2026-10-23T07:39:11Z');
-    LoginHabitatScene at(String utc, {bool confirmed = true}) =>
-        loginHabitatScene(
-          instant: DateTime.parse(utc),
-          hatchAt: hatch,
-          hatchConfirmed: confirmed,
-        );
-    expect(at('2026-10-23T07:39:10Z').period, 'afternoon');
-    expect(at('2026-10-23T07:39:11Z', confirmed: false).period, 'afternoon');
-    expect(at('2026-10-23T07:39:11Z').period, 'evening');
-    expect(at('2026-10-23T11:59:59Z').period, 'evening');
-    expect(at('2026-10-23T12:00:00Z').period, 'night');
-    expect(at('2026-10-24T02:00:00Z').period, 'morning');
-    expect(at('2026-10-24T07:39:11Z').period, 'afternoon');
   });
 
   test('the seven days and four periods select 28 distinct assets', () {

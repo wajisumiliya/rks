@@ -11,9 +11,7 @@ import 'package:intl/intl.dart';
 import '../services/app_service.dart';
 import '../services/notification_service.dart';
 import '../services/login_habitat_scene.dart';
-import '../services/mystery_egg_hatch_controller.dart';
 import '../theme/daily_portal_theme.dart';
-import '../widgets/portal_penguin_companion.dart';
 import '../widgets/mobile_reference_login.dart';
 import 'admin_dashboard.dart';
 import 'branch_dashboard.dart';
@@ -22,8 +20,7 @@ import 'request_admin_dashboard.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen(
-      {super.key, this.hatchController, this.showThemePreview = true});
-  final MysteryEggHatchController? hatchController;
+      {super.key, this.showThemePreview = true});
   final bool showThemePreview;
 
   @override
@@ -50,20 +47,12 @@ class _LoginScreenState extends State<LoginScreen>
   int? _weatherCode;
   bool _weatherLoading = true;
   int? _previewWeekday;
-  late final _hatchController =
-      widget.hatchController ?? MysteryEggHatchController.shared;
-  DateTime get _displayNow => malaysiaTime(_hatchController.serverNow ?? _now);
+  DateTime get _displayNow => malaysiaTime(_now);
 
   LoginHabitatScene get _habitatScene => loginHabitatScene(
-        instant: _hatchController.serverNow ?? _now,
-        hatchAt: _hatchController.hatchAt,
-        hatchConfirmed: _hatchController.stage != 'egg',
+        instant: _now,
         previewWeekday: kDebugMode ? _previewWeekday : null,
       );
-
-  void _onHatchChanged() {
-    if (mounted) setState(() {});
-  }
 
   String? errorMessage;
 
@@ -77,8 +66,6 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
-    _hatchController.addListener(_onHatchChanged);
-    _hatchController.attach();
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -187,8 +174,6 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   void dispose() {
-    _hatchController.removeListener(_onHatchChanged);
-    _hatchController.detach();
     _entranceController.dispose();
     _ambientController.dispose();
     _rainController.dispose();
@@ -878,11 +863,6 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             const SizedBox(height: 20),
                             _sevenDayAuthCard(theme, compact: true),
-                            const SizedBox(height: 16),
-                            PortalPenguinCompanion(
-                                controller: _hatchController,
-                                compact: true,
-                                loginScene: _habitatScene),
                           ],
                         ),
                       ),
@@ -1068,20 +1048,6 @@ class _LoginScreenState extends State<LoginScreen>
             ],
           ),
         ),
-        Positioned(
-            left: 48,
-            right: 42,
-            top: 230,
-            bottom: 24,
-            child: SingleChildScrollView(
-                child: Align(
-                    alignment: Alignment.topLeft,
-                    child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 520),
-                        child: PortalPenguinCompanion(
-                            controller: _hatchController,
-                            compact: true,
-                            loginScene: _habitatScene))))),
       ],
     );
   }

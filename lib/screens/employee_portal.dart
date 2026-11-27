@@ -21,7 +21,6 @@ import '../widgets/annual_leave_balance_card.dart';
 import '../widgets/payroll_year_summary.dart';
 import '../widgets/app_reload_button.dart';
 import '../widgets/employee_identity_card.dart';
-import '../widgets/employee_penguin_pet_card.dart';
 import '../widgets/premium_portal_sidebar.dart';
 import '../utils/app_reload.dart';
 
@@ -1135,7 +1134,6 @@ class _EmployeePortalState extends State<EmployeePortal>
             const SizedBox(height: 16),
             _emptyPayroll(),
             const SizedBox(height: 16),
-            const EmployeePenguinPetCard(),
           ],
         ),
       );
@@ -1162,7 +1160,6 @@ class _EmployeePortalState extends State<EmployeePortal>
                 const SizedBox(height: 12),
                 _myWorkdayCard(),
                 const SizedBox(height: 16),
-                const EmployeePenguinPetCard(),
               ] else ...[
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1190,7 +1187,6 @@ class _EmployeePortalState extends State<EmployeePortal>
                 const SizedBox(height: 16),
                 _myWorkdayCard(),
                 const SizedBox(height: 16),
-                const EmployeePenguinPetCard(),
               ],
             ],
           ),

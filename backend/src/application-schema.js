@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises';
 import { drainPayslipNotifications } from './payslip-notifications.js';
-import { ensureMysteryEggCampaign } from './mystery-eggs.js';
 const VERSION = '20261020_neon_application_api_v1';
 export async function ensureApplicationSchema(pool) {
   const client = await pool.connect();
@@ -27,12 +26,6 @@ export async function ensureApplicationSchema(pool) {
       await client.query(await readFile(new URL('../migrations/20261020_neon_employee_photos.sql', import.meta.url), 'utf8'));
       await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [photoVersion]);
     }
-    const penguinVersion = '20261021_employee_penguin_pet_v1';
-    const penguinMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [penguinVersion]);
-    if (!penguinMigration.rowCount) {
-      await client.query(await readFile(new URL('../migrations/20261021_employee_penguin_pet.sql', import.meta.url), 'utf8'));
-      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [penguinVersion]);
-    }
     const birthdayVersion = '20261023_birthday_wishes_v1';
     const birthdayMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [birthdayVersion]);
     if (!birthdayMigration.rowCount) {
@@ -44,13 +37,6 @@ export async function ensureApplicationSchema(pool) {
     if (!anniversaryMigration.rowCount) {
       await client.query(await readFile(new URL('../migrations/20261023_anniversary_wishes.sql', import.meta.url), 'utf8'));
       await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [anniversaryVersion]);
-    }
-    await ensureMysteryEggCampaign(client);
-    const revealVersion = '20261023_mystery_egg_reveal_hour_v1';
-    const revealMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [revealVersion]);
-    if (!revealMigration.rowCount) {
-      await client.query(await readFile(new URL('../migrations/20261023_mystery_egg_reveal_hour.sql', import.meta.url), 'utf8'));
-      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [revealVersion]);
     }
     const lateReviewVersion = '20261026_late_report_reviews_v1';
     const lateReviewMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [lateReviewVersion]);
