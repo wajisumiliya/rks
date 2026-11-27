@@ -25,7 +25,7 @@ class PdfService {
 
     try {
       final data =
-          await rootBundle.load('assets/hasani_books_payslip_logo.jpeg');
+          await rootBundle.load('assets/hasani_books_logo.jpg');
       logo = pw.MemoryImage(
           data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
     } catch (_) {}
@@ -187,8 +187,8 @@ class PdfService {
         children: [
           if (logo != null)
             pw.Container(
-              width: 42,
-              height: 42,
+              width: 62,
+              height: 22,
               margin: const pw.EdgeInsets.only(right: 8),
               child: pw.Image(logo, fit: pw.BoxFit.contain),
             ),
@@ -198,7 +198,7 @@ class PdfService {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
-                  'Payroll Company',
+                  'RK SUCCESS SDN BHD',
                   maxLines: 1,
                   style: pw.TextStyle(
                     fontSize: 5.8,
@@ -207,10 +207,12 @@ class PdfService {
                 ),
                 pw.SizedBox(height: 2),
                 pw.Text(
-                  '41A-44A JALAN PENGKALAN,\n'
-                  'TAMAN PEKAN BARU,\n'
-                  '08000 SUNGAI PETANI, KEDAH\n'
-                  'TEL : 04-425 3699 / 04-425 3702',
+                  'REG NO: 202501002674 (1604087-A)\n'
+                  'LOT - G07, GIANT HYPERMARKET 5,\n'
+                  'JALAN KILANG, OFF JALAN GENTING KLANG\n'
+                  'TAMAN DANAU KOTA, 53300 SETAPAK\n'
+                  'WP KUALA LUMPUR, MALAYSIA\n'
+                  'HP: +60 17-329 0333',
                   style: const pw.TextStyle(fontSize: 5.5, lineSpacing: 1),
                 ),
               ],
