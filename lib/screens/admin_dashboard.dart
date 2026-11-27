@@ -1026,7 +1026,8 @@ class _AdminDashboardState extends State<AdminDashboard>
               item('Attendance', Icons.event_available_rounded, 3),
               item('Payroll', Icons.account_balance_wallet_rounded, 2),
               if (service.currentUser?.isReviewer != true)
-                item('Salary Report', Icons.table_chart_outlined, 20),
+                if (const bool.fromEnvironment('ENABLE_SALARY_REPORT'))
+                  item('Salary Report', Icons.table_chart_outlined, 20),
               item('Employee Payslips', Icons.badge_rounded, 12),
               item('EA Forms', Icons.description_rounded, 15),
               PremiumPortalSidebarItem(
