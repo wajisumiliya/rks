@@ -614,6 +614,14 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
 
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      border: const OutlineInputBorder(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const navy = Color(0xFF12243C);
