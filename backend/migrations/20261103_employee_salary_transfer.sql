@@ -1,8 +1,18 @@
 ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS salary_transfer_method text;
 UPDATE public.employees SET salary_transfer_method = 'rhb'
 WHERE salary_transfer_method IS NULL AND NULLIF(BTRIM(bank_account), '') IS NOT NULL;
-ALTER TABLE public.employees ADD CONSTRAINT employees_salary_transfer_method_check
-CHECK (salary_transfer_method IS NULL OR salary_transfer_method IN ('rhb', 'instant', 'cash'));
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.employees'::regclass
+      AND conname = 'employees_salary_transfer_method_check'
+  ) THEN
+    ALTER TABLE public.employees ADD CONSTRAINT employees_salary_transfer_method_check
+    CHECK (salary_transfer_method IS NULL OR salary_transfer_method IN ('rhb', 'instant', 'cash'));
+  END IF;
+END;
+$$;
 
 -- Apply the default to future imports and edits as well as existing employees.
 CREATE OR REPLACE FUNCTION app_private.default_employee_salary_transfer()
@@ -17,6 +27,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-CREATE TRIGGER employees_salary_transfer_default
+CREATE OR REPLACE TRIGGER employees_salary_transfer_default
 BEFORE INSERT OR UPDATE OF bank_account, salary_transfer_method ON public.employees
 FOR EACH ROW EXECUTE FUNCTION app_private.default_employee_salary_transfer();
