@@ -649,6 +649,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
+          const Positioned.fill(child: _PayrollBackdrop()),
           SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -807,6 +808,59 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PayrollBackdrop extends StatelessWidget {
+  const _PayrollBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return const IgnorePointer(
+      child: ExcludeSemantics(
+        child: Stack(
+          children: [
+            Align(
+              alignment: Alignment(-.88, -.67),
+              child: _FinanceMotif(icon: Icons.receipt_long_outlined, size: 88),
+            ),
+            Align(
+              alignment: Alignment(.88, -.74),
+              child: _FinanceMotif(icon: Icons.calculate_outlined, size: 78),
+            ),
+            Align(
+              alignment: Alignment(-.88, .72),
+              child: _FinanceMotif(icon: Icons.account_balance_wallet_outlined, size: 78),
+            ),
+            Align(
+              alignment: Alignment(.88, .68),
+              child: _FinanceMotif(icon: Icons.bar_chart_rounded, size: 90),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FinanceMotif extends StatelessWidget {
+  const _FinanceMotif({required this.icon, required this.size});
+
+  final IconData icon;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size + 28,
+      height: size + 28,
+      decoration: BoxDecoration(
+        color: const Color(0x202B4D78),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0x66D4E7FF)),
+      ),
+      child: Icon(icon, size: size * .72, color: const Color(0xBBD7E9FF)),
     );
   }
 }
