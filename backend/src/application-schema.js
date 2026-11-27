@@ -1,0 +1,173 @@
+import { readFile } from 'node:fs/promises';
+import { drainPayslipNotifications } from './payslip-notifications.js';
+import { ensureMysteryEggCampaign } from './mystery-eggs.js';
+const VERSION = '20261020_neon_application_api_v1';
+export async function ensureApplicationSchema(pool) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('hasani-application-schema'))");
+    await client.query('CREATE SCHEMA IF NOT EXISTS app_private');
+    await client.query('REVOKE ALL ON SCHEMA app_private FROM PUBLIC');
+    await client.query(`CREATE TABLE IF NOT EXISTS app_private.schema_migrations (
+      version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now()
+    )`);
+    const existing = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [VERSION]);
+    if (!existing.rowCount) {
+      let sql = await readFile(new URL('../migrations/20261020_neon_application_api.sql', import.meta.url), 'utf8');
+      sql = sql.replace('\nBEGIN;\n', '\n').replace(/\nCOMMIT;\s*$/, '\n');
+      await client.query(sql);
+      await client.query('REVOKE ALL ON SCHEMA app_private FROM anon,authenticated');
+      await client.query('REVOKE ALL ON ALL TABLES IN SCHEMA app_private FROM PUBLIC,anon,authenticated');
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [VERSION]);
+    }
+    const photoVersion = '20261020_neon_employee_photos_v1';
+    const photoMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [photoVersion]);
+    if (!photoMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261020_neon_employee_photos.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [photoVersion]);
+    }
+    const penguinVersion = '20261021_employee_penguin_pet_v1';
+    const penguinMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [penguinVersion]);
+    if (!penguinMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261021_employee_penguin_pet.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [penguinVersion]);
+    }
+    const birthdayVersion = '20261023_birthday_wishes_v1';
+    const birthdayMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [birthdayVersion]);
+    if (!birthdayMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261023_birthday_wishes.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [birthdayVersion]);
+    }
+    const anniversaryVersion = '20261023_anniversary_wishes_v1';
+    const anniversaryMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [anniversaryVersion]);
+    if (!anniversaryMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261023_anniversary_wishes.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [anniversaryVersion]);
+    }
+    await ensureMysteryEggCampaign(client);
+    const revealVersion = '20261023_mystery_egg_reveal_hour_v1';
+    const revealMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [revealVersion]);
+    if (!revealMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261023_mystery_egg_reveal_hour.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [revealVersion]);
+    }
+    const lateReviewVersion = '20261026_late_report_reviews_v1';
+    const lateReviewMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [lateReviewVersion]);
+    if (!lateReviewMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261026_late_report_reviews.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [lateReviewVersion]);
+    }
+    const leaveBalanceVersion = '20261031_employee_leave_balances_v1';
+    const leaveBalanceMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [leaveBalanceVersion]);
+    if (!leaveBalanceMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261031_employee_leave_balances.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [leaveBalanceVersion]);
+    }
+    const mcOpeningVersion = '20261031_mc_opening_balances_v1';
+    const mcOpeningMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [mcOpeningVersion]);
+    if (!mcOpeningMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261031_mc_opening_balances.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [mcOpeningVersion]);
+    }
+    const attendanceStatusVersion = '20261031_attendance_ul_ph_ganti_v1';
+    const attendanceStatusMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [attendanceStatusVersion]);
+    if (!attendanceStatusMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261031_attendance_ul_ph_ganti.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [attendanceStatusVersion]);
+    }
+    const shiftSnapshotVersion = '20261031_attendance_shift_snapshots_v1';
+    const shiftSnapshotMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [shiftSnapshotVersion]);
+    if (!shiftSnapshotMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261031_attendance_shift_snapshots.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [shiftSnapshotVersion]);
+    }
+    const ulUnpaidVersion = '20261031_attendance_ul_unpaid_v1';
+    const ulUnpaidMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [ulUnpaidVersion]);
+    if (!ulUnpaidMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261031_attendance_ul_unpaid.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [ulUnpaidVersion]);
+    }
+    const incrementSyncVersion = '20261101_payroll_increment_sync_v1';
+    const incrementSyncMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [incrementSyncVersion]);
+    if (!incrementSyncMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261101_payroll_increment_sync.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [incrementSyncVersion]);
+    }
+    const adjustmentVersion = '20261114_payroll_employer_epf_adjustments_v1';
+    if (!(await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [adjustmentVersion])).rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261114_payroll_employer_epf_adjustments.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [adjustmentVersion]);
+    }
+    const componentAdjustmentVersion = '20261114_payroll_component_adjustments_v1';
+    if (!(await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [componentAdjustmentVersion])).rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261114_payroll_component_adjustments.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [componentAdjustmentVersion]);
+    }
+    const transferVersion = '20261103_employee_salary_transfer_v1';
+    const transferMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [transferVersion]);
+    if (!transferMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261103_employee_salary_transfer.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [transferVersion]);
+    }
+    const allowanceVersion = '20261104_attendance_allowance_baseline_v1';
+    const allowanceMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [allowanceVersion]);
+    if (!allowanceMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261104_attendance_allowance_baseline.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [allowanceVersion]);
+    }
+    const noticeVersion = '20261104_payslip_publication_notifications_v1';
+    const noticeMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [noticeVersion]);
+    if (!noticeMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261104_payslip_publication_notifications.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [noticeVersion]);
+    }
+    const welfareVersion = '20261126_employee_welfare_v1';
+    const welfareMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [welfareVersion]);
+    if (!welfareMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261126_employee_welfare.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [welfareVersion]);
+    }
+    const temporarySalaryVersion = '20261108_salary_report_temporary_payroll_v1';
+    const temporarySalaryMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [temporarySalaryVersion]);
+    if (!temporarySalaryMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261108_salary_report_temporary_payroll.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [temporarySalaryVersion]);
+    }
+    const assignmentVersion = '20261107_salary_report_branch_assignments_v1';
+    const assignmentMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [assignmentVersion]);
+    if (!assignmentMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261107_salary_report_branch_assignments.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [assignmentVersion]);
+    }
+    const recoveryVersion = '20261104_payslip_push_registration_recovery_v1';
+    const recoveryMigration = await client.query('SELECT 1 FROM app_private.schema_migrations WHERE version=$1', [recoveryVersion]);
+    if (!recoveryMigration.rowCount) {
+      await client.query(await readFile(new URL('../migrations/20261104_payslip_push_registration_recovery.sql', import.meta.url), 'utf8'));
+      await client.query('INSERT INTO app_private.schema_migrations(version) VALUES ($1)', [recoveryVersion]);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK'); throw error;
+  } finally { client.release(); }
+}
+
+// Replaces the former provider's pg_cron job. The SQL function locks pending
+// schedules with SKIP LOCKED, so overlapping Render instances are safe.
+export function startPayslipReleaseWorker(pool) {
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      await pool.query('SELECT public.release_due_payslips()');
+      await drainPayslipNotifications(pool);
+    }
+    catch (error) { console.error('PAYSLIP RELEASE ERROR:', error.code || 'release_error'); }
+    finally { running = false; }
+  };
+  void tick();
+  const timer = setInterval(tick, 60000);
+  timer.unref();
+  return () => clearInterval(timer);
+}

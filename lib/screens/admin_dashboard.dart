@@ -1,0 +1,23716 @@
+import '../widgets/employee_annual_payslip_summary.dart';
+import '../widgets/payroll_overview_table.dart';
+import '../widgets/admin_reports_menu.dart';
+import '../services/saved_payroll_amounts.dart';
+import '../services/statutory_payment_reconciliation.dart';
+import '../services/payroll_summary_pdf_layout.dart';
+import '../services/payroll_edit_update.dart';
+import '../widgets/salary_report_page.dart';
+import '../widgets/bonus_report_dialog.dart';
+import '../widgets/attendance_allowance_report_dialog.dart';
+import '../services/payroll_month_scope.dart';
+import '../services/salary_transfer.dart';
+import '../widgets/salary_transfer_field.dart';
+import '../widgets/employee_payslip_directory.dart';
+import '../services/payroll_readiness_selection.dart';
+import '../widgets/payroll_generation_dialog.dart';
+import '../widgets/payroll_editor_summary.dart';
+import '../widgets/employee_directory_pagination.dart';
+import '../widgets/payroll_excel_export_dialog.dart';
+import '../widgets/admin_activity_cards.dart';
+import '../services/attendance_batch_print_service.dart';
+// ignore_for_file: unused_element, use_build_context_synchronously
+
+import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:file_picker/file_picker.dart';
+import 'package:intl/intl.dart';
+import 'package:image/image.dart' as img;
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import '../models/payroll.dart';
+import '../services/app_service.dart';
+import '../services/neon_api.dart';
+import '../theme/daily_portal_theme.dart';
+import '../services/ot_request_pdf_service.dart';
+import '../services/attendance_payroll_service.dart';
+import '../services/payroll_calculation_service.dart';
+import '../services/pdf_service.dart';
+import '../services/notification_service.dart';
+import 'login_screen.dart';
+import 'late_report_page.dart';
+import 'dart:convert';
+import 'package:csv/csv.dart';
+import 'package:flutter/services.dart' show ByteData, rootBundle;
+import 'package:excel_plus/excel_plus.dart' as xls;
+import 'package:archive/archive.dart';
+import 'package:file_saver/file_saver.dart';
+import 'dart:typed_data';
+import 'dart:math' as math;
+import 'dart:async';
+import '../screens/supabase_service.dart';
+import '../screens/attendance_dialog.dart';
+import 'monthly_roster_page.dart';
+import 'leave_requests_approval_page.dart';
+import 'daily_report_page.dart';
+import 'ea_forms_page.dart';
+import '../widgets/employee_photo.dart';
+import '../widgets/employee_profile_details.dart';
+import '../widgets/app_reload_button.dart';
+import '../widgets/premium_portal_sidebar.dart';
+import '../widgets/modern_admin_overview.dart';
+import '../widgets/admin_analytics.dart';
+import '../dashboard_brand_logos.dart';
+
+class _DashboardHeaderPainter extends CustomPainter {
+  const _DashboardHeaderPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final blue = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF121626), Color(0xFF232D47)],
+      ).createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, blue);
+
+    final red = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF3D465C), Color(0xFF252C3E)],
+      ).createShader(Offset.zero & size);
+    final redArea = Path()
+      ..moveTo(size.width * .54, 0)
+      ..quadraticBezierTo(
+        size.width * .46,
+        size.height * .5,
+        size.width * .54,
+        size.height,
+      )
+      ..lineTo(size.width, size.height)
+      ..lineTo(size.width, 0)
+      ..close();
+    canvas.drawPath(redArea, red);
+    canvas.drawRect(
+      Rect.fromLTWH(0, size.height - 3, size.width, 3),
+      Paint()..color = const Color(0xFFD6B24F),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class AdminDashboard extends StatefulWidget {
+  const AdminDashboard({super.key});
+
+  @override
+  State<AdminDashboard> createState() => _AdminDashboardState();
+}
+
+class _AdminDashboardState extends State<AdminDashboard>
+    with SingleTickerProviderStateMixin {
+  static const _midnight = Color(0xFF1B2234);
+  static const _champagne = Color(0xFFD6B24F);
+  static const _warmSurface = Color(0xFFFAF8F1);
+  static const _warmBackground = Color(0xFFF3F0E7);
+  static const _warmBorder = Color(0xFFD3C7A5);
+
+  final AppService service = AppService.instance;
+
+  ThemeData _adminThemeData(BuildContext context) {
+    final base = Theme.of(context);
+    const scheme = ColorScheme.light(
+      primary: _midnight,
+      onPrimary: Colors.white,
+      secondary: _champagne,
+      onSecondary: Color(0xFF171509),
+      surface: _warmSurface,
+      onSurface: Color(0xFF252418),
+      outline: _warmBorder,
+      surfaceContainerHighest: Color(0xFFE9E1CC),
+    );
+    return base.copyWith(
+      colorScheme: scheme,
+      scaffoldBackgroundColor: _warmBackground,
+      canvasColor: _warmSurface,
+      dividerColor: _warmBorder.withValues(alpha: .65),
+      cardTheme: const CardThemeData(
+        color: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Color(0x12000000),
+        elevation: 1,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          side: BorderSide(color: Color(0xFFE2E5EB)),
+        ),
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: _warmSurface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
+        titleTextStyle: TextStyle(
+          color: _midnight,
+          fontSize: 20,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: const Color(0xFFFFFDF8),
+        labelStyle: const TextStyle(color: Color(0xFF655E4D)),
+        hintStyle: const TextStyle(color: Color(0xFF8C8576)),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD9DDE5)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _champagne, width: 1.5),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: _midnight,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(0, 44),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: _midnight,
+          side: const BorderSide(color: _champagne),
+          minimumSize: const Size(0, 44),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: _champagne,
+        linearTrackColor: Color(0xFFE2DAC5),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? _midnight
+              : Colors.transparent,
+        ),
+        side: const BorderSide(color: _warmBorder),
+      ),
+    );
+  }
+
+  String get _adminScopeName => service.currentUser?.isLocalAdmin == true
+      ? 'Local Admin'
+      : service.currentUser?.isForeignAdmin == true
+          ? 'Foreign Admin'
+          : service.currentUser?.isAttendanceAdmin == true
+              ? 'Attendance Admin'
+              : 'Admin User';
+
+  String get _adminScopeLabel => service.currentUser?.isLocalAdmin == true
+      ? 'Local staff only'
+      : service.currentUser?.isForeignAdmin == true
+          ? 'Foreign staff only'
+          : service.currentUser?.isAttendanceAdmin == true
+              ? 'Attendance only'
+              : 'Administrator';
+
+  bool get _attendanceOnly => service.currentUser?.isAttendanceAdmin == true;
+
+  DailyPortalTheme get _portalTheme => DailyPortalTheme.today();
+
+  int selectedPage = 0;
+
+  /// Dashboard flashcard currently selected.
+  ///
+  /// null = no flashcard filter selected.
+  /// departments
+  /// branches
+  /// vacation
+  /// active
+  /// new_joiner
+  String? selectedDashboardCard;
+
+  String? selectedAttendanceBranchId;
+  DateTime selectedAttendanceMonth =
+      DateTime(DateTime.now().year, DateTime.now().month);
+  DateTime selectedPayrollMonth =
+      DateTime(DateTime.now().year, DateTime.now().month);
+  DateTime selectedDashboardMonth =
+      DateTime(DateTime.now().year, DateTime.now().month);
+  String? selectedDashboardBranchId;
+  DateTime selectedReportMonth =
+      DateTime(DateTime.now().year, DateTime.now().month);
+  String? selectedPayrollBranchId;
+  String? selectedPayslipEmployeeId;
+  int? selectedEmployeePayslipYear;
+  DateTime selectedPayslipMonth =
+      DateTime(DateTime.now().year, DateTime.now().month);
+  String? selectedLogBranchId;
+  DateTime? selectedLogDate;
+  Future<Map<String, dynamic>>? _dashboardDataFuture;
+  String? _dashboardDataFutureKey;
+  Future<Map<String, dynamic>>? _dashboardActivityFuture;
+  String? _dashboardActivityKey;
+  Future<List<dynamic>>? _payrollPageFuture;
+  String? _payrollPageFutureKey;
+  Future<List<Map<String, dynamic>>>? _branchLogsFuture;
+  Future<List<Map<String, dynamic>>>? _adminEmployeesFuture;
+  static const _employeePageSize = 24;
+  int _adminEmployeePage = 0;
+  List<Map<String, dynamic>>? _employeeRowsSnapshot;
+  DateTime? _employeeRowsAt;
+  int _employeeSessionVersion = NeonApi.sessionVersion;
+  bool _employeeDirectoryRefreshing = false;
+  bool _employeeEditLoading = false;
+  int _employeeEditRequest = 0;
+  final Map<String, Map<String, dynamic>> _employeeSalaryCache = {};
+  final Map<String, DateTime> _employeeSalaryCacheTime = {};
+  void _ensureEmployeeSession() {
+    if (_employeeSessionVersion != NeonApi.sessionVersion) {
+      _employeeSessionVersion = NeonApi.sessionVersion;
+      _employeeRowsSnapshot = null;
+      _employeeRowsAt = null;
+      _adminEmployeesFuture = null;
+      _employeeSalaryCache.clear();
+      _employeeSalaryCacheTime.clear();
+      _employeeDirectoryRefreshing = false;
+    }
+  }
+
+  List<Map<String, dynamic>>? get _employeeSnapshot {
+    _ensureEmployeeSession();
+    return _employeeRowsSnapshot;
+  }
+
+  void _rememberEmployeeRows(List<Map<String, dynamic>> rows) {
+    _ensureEmployeeSession();
+    _employeeRowsSnapshot = _scopedEmployeeRows(rows);
+    _employeeRowsAt = DateTime.now();
+    for (final row in _employeeRowsSnapshot!) {
+      if (!row.containsKey('_salary_defaults')) continue;
+      final id = _dashboardBranchKey(row['employee_id']);
+      _employeeSalaryCache[id] = row['_salary_defaults'] is Map
+          ? Map<String, dynamic>.from(row['_salary_defaults'] as Map)
+          : {};
+      _employeeSalaryCacheTime[id] = _employeeRowsAt!;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _employeeDirectoryData() {
+    final snapshot = _employeeSnapshot;
+    final fresh = _employeeRowsAt != null &&
+        DateTime.now().difference(_employeeRowsAt!) <
+            const Duration(seconds: 30);
+    if (_adminEmployeesFuture == null && fresh && snapshot != null) {
+      _adminEmployeesFuture = Future.value(snapshot);
+    } else if (_adminEmployeesFuture == null ||
+        (!fresh && !_employeeDirectoryRefreshing)) {
+      _employeeDirectoryRefreshing = true;
+      _adminEmployeesFuture = _loadScopedEmployees()
+          .whenComplete(() => _employeeDirectoryRefreshing = false);
+    }
+    return _adminEmployeesFuture!;
+  }
+
+  Future<List<Map<String, dynamic>>>? _employeeRequestsFuture;
+  String _employeeRequestStatus = 'PENDING';
+  Future<List<Map<String, dynamic>>>? _otRequestsFuture;
+  Future<List<dynamic>>? _attendancePageFuture;
+  String? _attendancePageFutureKey;
+  Future<List<Map<String, dynamic>>>? _attendanceBranchesFuture;
+  final Map<String, Future<List<Map<String, dynamic>>>> _dashboardReportCache =
+      {};
+  final Map<String, Future<Map<String, dynamic>>> _statutoryReportCache = {};
+  final Map<String, DateTime> _dashboardReportCacheTime = {};
+  final Map<String, DateTime> _statutoryReportCacheTime = {};
+  final TextEditingController _adminEmployeeSearchController =
+      TextEditingController();
+  final TextEditingController _attendanceEmployeeSearchController =
+      TextEditingController();
+  final TextEditingController _payslipEmployeeSearchController =
+      TextEditingController();
+  String _adminEmployeeSearch = '';
+  String? _adminEmployeeBranchFilter;
+  String _adminEmployeeStatusFilter = 'all';
+  String _attendanceEmployeeSearch = '';
+  bool _attendancePrintMode = false, _attendanceBatchPrinting = false;
+  String? _attendancePrintScope;
+  final Set<String> _attendancePrintIds = {};
+  String _payslipEmployeeSearch = '';
+  bool? _payslipShowActiveEmployees = true;
+  String _attendanceSubmissionFilter = 'submitted';
+  DateTime _attendanceStatusDate = DateTime.now();
+  String _attendanceStatusFilter = 'OFF';
+  bool _attendanceStatusMonthly = false;
+  Future<List<dynamic>>? _attendanceStatusFuture;
+  String? _attendanceStatusFutureKey;
+  final Set<String> _attendanceStatusUpdatingIds = <String>{};
+  final Map<String, String> _approvedOtInputs = {};
+  late final AnimationController _flagAnimationController;
+
+  final List<String> months = const [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (_attendanceOnly) selectedPage = 3;
+    _flagAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+    service.addListener(_refresh);
+    _attendanceBranchesFuture = SupabaseService.getBranches();
+  }
+
+  @override
+  void dispose() {
+    service.removeListener(_refresh);
+    _flagAnimationController.dispose();
+    _adminEmployeeSearchController.dispose();
+    _attendanceEmployeeSearchController.dispose();
+    _payslipEmployeeSearchController.dispose();
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (!mounted) return;
+
+    setState(() {
+      _adminEmployeesFuture = null;
+      _employeeRowsAt = null;
+      _dashboardDataFuture = null;
+      _dashboardDataFutureKey = null;
+      _dashboardActivityFuture = null;
+      _payrollPageFuture = null;
+      _payrollPageFutureKey = null;
+    });
+  }
+
+  // ===========================================================================
+  // NAVIGATION
+  // ===========================================================================
+
+  void changePage(int page) {
+    if (_attendanceOnly && !const {3, 16, 19}.contains(page)) return;
+
+    // RHB Layout is an export action, not a normal page.
+    if (page == 8) {
+      _showRhbPeriodDialog();
+      return;
+    }
+
+    setState(() {
+      selectedPage = page;
+
+      if (page != 0) {
+        selectedDashboardCard = null;
+      }
+    });
+  }
+
+  Future<bool> _exportSelectedPayrollExcel(
+      DateTime month, Set<String> selected) async {
+    try {
+      final files = <String, Uint8List>{};
+      void collect(String name, Uint8List bytes) {
+        files[name] = bytes;
+      }
+
+      if (selected.contains('Branch Payroll')) {
+        final records = await SupabaseService.getPayrollForMonth(month);
+        if (records.isEmpty) {
+          _message('No payroll records for the selected month.');
+          return false;
+        }
+        final branches = await service.loadNeonBranches();
+        final names = <String, String>{
+          for (final branch in branches)
+            _branchIdFromMap(branch):
+                _branchNameFromMap(branch, _branchIdFromMap(branch))
+        };
+        await _exportPayrollAllBranchesExcel(records, names, onFile: collect);
+      }
+      for (final type in const ['EPF', 'SOCSO', 'EIS']) {
+        if (!selected.contains(type)) continue;
+        final report = await _fetchStatutoryReport(type, month);
+        await _exportStatutoryReportExcel(
+            type, month, List<List<dynamic>>.from(report['rows'] ?? const []),
+            onFile: collect);
+      }
+      if (selected.contains('HRDF')) {
+        final rows = await _fetchDashboardReportRows(month);
+        await _exportDashboardSummaryExcel('HRDF', month, rows,
+            onFile: collect);
+      }
+      final ordinaryReports = selected.length -
+          (selected.contains('RHB Layout') ? 1 : 0) -
+          (selected.contains('Payroll Summary PDF') ? 1 : 0);
+      if (files.length != ordinaryReports) return false;
+      if (selected.contains('RHB Layout')) {
+        if (!await _exportRhbLayout(only: 'rhb', onFile: collect)) return false;
+      }
+      for (final file in files.entries) {
+        await FileSaver.instance.saveFile(
+            name: file.key.replaceFirst(RegExp(r'\.xlsx$'), ''),
+            bytes: file.value,
+            ext: 'xlsx',
+            mimeType: MimeType.microsoftExcel);
+      }
+      if (selected.contains('Payroll Summary PDF')) {
+        final rows = await _fetchDashboardReportRows(month, allBranches: true);
+        if (rows.isEmpty) {
+          _message('No payroll summary for the selected month.');
+          return false;
+        }
+        await _printDashboardReport('Payroll Summary', month, rows);
+      }
+      _message(
+          'Prepared selected payroll files${selected.contains('Payroll Summary PDF') ? ' and Payroll Summary PDF' : ''}.');
+      return true;
+    } catch (error) {
+      _message('Excel export failed: $error');
+      return false;
+    }
+  }
+
+  bool _payrollExcelExportBusy = false;
+  Future<void> _showRhbPeriodDialog() async {
+    if (_payrollExcelExportBusy) return;
+    _payrollExcelExportBusy = true;
+    try {
+      await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => PayrollExcelExportDialog(
+          initialMonth: selectedPayrollMonth,
+          onGenerate: (period, files) async {
+            setState(() => selectedPayrollMonth = period);
+            return _exportSelectedPayrollExcel(period, files);
+          },
+        ),
+      );
+    } finally {
+      _payrollExcelExportBusy = false;
+    }
+  }
+
+  String _pageTitle() {
+    switch (selectedPage) {
+      case 0:
+        return 'Dashboard';
+      case 1:
+        return 'Employees';
+      case 2:
+        return 'Payroll';
+      case 3:
+        return 'Attendance';
+      case 4:
+        return 'Import CSV';
+      case 5:
+        return 'Import Payroll';
+      case 6:
+        return 'Reports';
+      case 7:
+        return 'Settings';
+      case 8:
+        return 'RHB Layout';
+      case 9:
+        return 'Branch Logs';
+      case 10:
+        return 'Employee Requests';
+      case 11:
+        return 'OT Requests';
+      case 12:
+        return 'Employee Payslips';
+      case 13:
+        return 'Leave Requests';
+      case 14:
+        return 'Daily Reports';
+      case 15:
+        return 'EA Forms';
+      case 16:
+        return 'Status View';
+      case 17:
+        return 'Branch Passwords';
+      case 18:
+        return 'Late Report';
+      case 19:
+        return 'Attendance Late';
+      case 20:
+        return 'Salary Report';
+      default:
+        return 'Dashboard';
+    }
+  }
+
+  Widget _statusChip(String status) {
+    final normalizedStatus = status.trim().toLowerCase();
+
+    Color backgroundColor;
+    Color textColor;
+
+    switch (normalizedStatus) {
+      case 'active':
+      case 'approved':
+      case 'present':
+        backgroundColor = Colors.green.shade50;
+        textColor = Colors.green.shade700;
+        break;
+
+      case 'inactive':
+      case 'rejected':
+      case 'absent':
+        backgroundColor = Colors.red.shade50;
+        textColor = Colors.red.shade700;
+        break;
+
+      case 'pending':
+      case 'leave':
+        backgroundColor = Colors.orange.shade50;
+        textColor = Colors.orange.shade700;
+        break;
+
+      default:
+        backgroundColor = Colors.grey.shade100;
+        textColor = Colors.grey.shade700;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        status.isEmpty ? 'Unknown' : status,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _currentPage() {
+    if (_attendanceOnly) {
+      return switch (selectedPage) {
+        16 => _attendanceStatusPage(),
+        19 => _accountAttendanceLatePage(),
+        _ => _attendancePage(),
+      };
+    }
+
+    switch (selectedPage) {
+      case 0:
+        return _dashboardPage();
+
+      case 1:
+        return ColoredBox(
+            color: const Color(0xFFF5F8FE), child: _employeesPage());
+
+      case 2:
+        return _payrollPage();
+
+      case 3:
+        return _attendancePage();
+
+      case 4:
+        return _importPage();
+
+      case 5:
+        return _importPayrollPage();
+
+      case 6:
+        return _reportsPage();
+
+      case 7:
+        return _settingsPage();
+
+      case 8:
+        return _rhbLayoutPage();
+
+      case 9:
+        return _branchLogsPage();
+
+      case 10:
+        return _employeeRequestsPage();
+
+      case 11:
+        return _otRequestsPage();
+
+      case 12:
+        return _employeePayslipsPage();
+
+      case 13:
+        return const LeaveRequestsApprovalPage.admin();
+
+      case 14:
+        return const DailyReportPage.admin();
+
+      case 15:
+        return const EaFormsPage.admin();
+
+      case 17:
+        return _branchPasswordPage();
+      case 18:
+        return _modernLateReportPage();
+      case 20:
+        return SalaryReportPage(
+          load: service.loadSalaryReport,
+          export: service.exportSalaryReport,
+          loadAssignments: service.loadSalaryReportAssignments,
+          saveAssignment: service.saveSalaryReportAssignment,
+          loadTemporaryPayroll: service.loadTemporarySalaryPayroll,
+          saveTemporaryPayroll: service.saveTemporarySalaryPayroll,
+        );
+
+      default:
+        return _dashboardPage();
+    }
+  }
+
+  Widget _branchPasswordPage() {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 540),
+        child: Card(
+          margin: const EdgeInsets.all(16),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Branch Password Management',
+                    style:
+                        TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                const Text(
+                    'Set a password for an existing Neon branch account. Inactive accounts remain inactive.'),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  onPressed: _showBranchPasswordDialog,
+                  icon: const Icon(Icons.lock_reset),
+                  label: const Text('Set Branch Password'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showBranchPasswordDialog() async {
+    final username = TextEditingController();
+    final password = TextEditingController();
+    final confirm = TextEditingController();
+    bool saving = false;
+    bool obscure = true;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: const Text('Set Branch Password'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: username,
+                    autocorrect: false,
+                    decoration: const InputDecoration(
+                      labelText: 'Branch username',
+                      hintText: 'e.g. hbsp or HBSPFRN',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: password,
+                    obscureText: obscure,
+                    enableSuggestions: false,
+                    autocorrect: false,
+                    decoration: InputDecoration(
+                      labelText: 'New password (12+ characters)',
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                            obscure ? Icons.visibility : Icons.visibility_off),
+                        onPressed: () =>
+                            setDialogState(() => obscure = !obscure),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: confirm,
+                    obscureText: obscure,
+                    enableSuggestions: false,
+                    autocorrect: false,
+                    decoration:
+                        const InputDecoration(labelText: 'Confirm password'),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: saving ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: saving
+                    ? null
+                    : () async {
+                        if (username.text.trim().isEmpty ||
+                            password.text.length < 12 ||
+                            password.text.length > 128 ||
+                            password.text != confirm.text) {
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                            const SnackBar(
+                                content: Text(
+                                    'Enter a username and matching password of 12–128 characters.')),
+                          );
+                          return;
+                        }
+                        setDialogState(() => saving = true);
+                        try {
+                          final result = await service.configureBranchPassword(
+                            username: username.text,
+                            newPassword: password.text,
+                          );
+                          if (result['ok'] != true) {
+                            throw Exception(
+                                result['message'] ?? 'Password setup failed');
+                          }
+                          if (!dialogContext.mounted) return;
+                          Navigator.pop(dialogContext);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content:
+                                    Text('Branch password saved in Neon.')),
+                          );
+                        } catch (error) {
+                          if (!dialogContext.mounted) return;
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                            SnackBar(content: Text('Unable to save: $error')),
+                          );
+                          setDialogState(() => saving = false);
+                        }
+                      },
+                child: Text(saving ? 'Saving...' : 'Save Password'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      username.dispose();
+      password.dispose();
+      confirm.dispose();
+    }
+  }
+
+  // ===========================================================================
+  // LOGOUT
+  // ===========================================================================
+
+  Future<void> logout() async {
+    await service.logout();
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => const LoginScreen(),
+      ),
+      (route) => false,
+    );
+  }
+
+  // ===========================================================================
+  // BUILD
+  // ===========================================================================
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: _adminThemeData(context),
+      child: Scaffold(
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth >= 850) {
+              return _desktopLayout();
+            }
+
+            return _mobileLayout();
+          },
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // DESKTOP LAYOUT
+  // ===========================================================================
+
+  Widget _desktopLayout() {
+    final theme = _portalTheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: theme.background,
+        ),
+      ),
+      child: Row(
+        children: [
+          _sidebar(),
+          Expanded(
+            child: Column(
+              children: [
+                if (selectedPage != 0) _topBar(),
+                Expanded(child: _portalPage(_currentPage())),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _portalPage(Widget child) => ColoredBox(
+        color: adminCanvas,
+        child: AdminReportsMenu.pages.contains(selectedPage)
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: TextButton.icon(
+                      onPressed: () => changePage(6),
+                      icon: const Icon(Icons.arrow_back),
+                      label: const Text('Back to Reports'),
+                    ),
+                  ),
+                  Expanded(child: child),
+                ],
+              )
+            : child,
+      );
+
+  // ===========================================================================
+  // MOBILE LAYOUT
+  // ===========================================================================
+
+  Widget _mobileLayout() {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: adminInk,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: selectedPage == 0
+            ? Image.asset('assets/hasani_books_logo.jpg',
+                height: 32, width: 156, fit: BoxFit.contain)
+            : Text(_pageTitle(),
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+        actions: [
+          const AppReloadButton(color: Colors.white),
+          IconButton(
+            tooltip: 'Logout',
+            onPressed: logout,
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
+      drawer: Drawer(backgroundColor: adminInk, child: _sidebar()),
+      bottomNavigationBar: _attendanceOnly
+          ? null
+          : Builder(
+              builder: (context) => NavigationBar(
+                    backgroundColor: Colors.white,
+                    indicatorColor: const Color(0xFFF1E7D3),
+                    selectedIndex: selectedPage == 0
+                        ? 0
+                        : selectedPage == 3
+                            ? 1
+                            : selectedPage == 2
+                                ? 2
+                                : 3,
+                    onDestinationSelected: (index) {
+                      if (index == 3) {
+                        Scaffold.of(context).openDrawer();
+                      } else {
+                        changePage([0, 3, 2][index]);
+                      }
+                    },
+                    destinations: const [
+                      NavigationDestination(
+                          icon: Icon(Icons.home_outlined),
+                          selectedIcon: Icon(Icons.home),
+                          label: 'Home'),
+                      NavigationDestination(
+                          icon: Icon(Icons.event_available_outlined),
+                          label: 'Attendance'),
+                      NavigationDestination(
+                          icon: Icon(Icons.account_balance_wallet_outlined),
+                          label: 'Payroll'),
+                      NavigationDestination(
+                          icon: Icon(Icons.more_horiz), label: 'More')
+                    ],
+                  )),
+      body: _portalPage(_currentPage()),
+    );
+  }
+
+  // ===========================================================================
+  // SIDEBAR
+  // ===========================================================================
+
+  Widget _sidebar() {
+    PremiumPortalSidebarItem item(String label, IconData icon, int page) =>
+        PremiumPortalSidebarItem(
+          label: label,
+          icon: icon,
+          selected: selectedPage == page ||
+              (page == 6 && AdminReportsMenu.pages.contains(selectedPage)),
+          onTap: () {
+            if (MediaQuery.sizeOf(context).width < 850) {
+              Navigator.of(context).pop();
+            }
+            changePage(page);
+          },
+        );
+    return PremiumPortalSidebar(
+      referenceDashboardStyle: !_attendanceOnly,
+      portalLabel: 'Payroll Portal',
+      profileName: _adminScopeName,
+      profileDetail: _adminScopeLabel,
+      profileIcon: Icons.admin_panel_settings_outlined,
+      items: _attendanceOnly
+          ? [
+              item('Attendance', Icons.event_available_rounded, 3),
+              item('Status View', Icons.view_sidebar_rounded, 16),
+              item('Attendance Late', Icons.alarm, 19),
+            ]
+          : [
+              item('Overview', Icons.grid_view_rounded, 0),
+              item('Employees', Icons.groups_rounded, 1),
+              item('Attendance', Icons.event_available_rounded, 3),
+              item('Payroll', Icons.account_balance_wallet_rounded, 2),
+              if (service.currentUser?.isReviewer != true)
+                item('Salary Report', Icons.table_chart_outlined, 20),
+              item('Employee Payslips', Icons.badge_rounded, 12),
+              item('EA Forms', Icons.description_rounded, 15),
+              PremiumPortalSidebarItem(
+                label: 'Edit Payroll',
+                icon: Icons.edit_document,
+                selected: false,
+                onTap: _showEditPayrollDialog,
+              ),
+              item('RHB Layout', Icons.account_balance_rounded, 8),
+              item('Reports', Icons.bar_chart_rounded, 6),
+              item('Settings', Icons.settings_rounded, 7),
+              item('Branch Passwords', Icons.password_rounded, 17),
+            ],
+      onLogout: logout,
+    );
+  }
+
+  Widget _drawerHeader() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      width: double.infinity,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Image.asset(
+            'assets/hasani_books_logo.jpg',
+            width: 160,
+            errorBuilder: (context, error, stackTrace) {
+              return const Text(
+                'Payroll Company',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF2D55D8),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'PAYROLL PORTAL',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF2D55D8),
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            _adminScopeLabel,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black54,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sidebarItem(
+    String title,
+    IconData icon,
+    int page,
+  ) {
+    final bool selected = selectedPage == page;
+    final accent = _navigationAccent(page);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 4,
+      ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        decoration: BoxDecoration(
+          gradient: selected
+              ? LinearGradient(
+                  colors: [
+                    accent.withValues(alpha: .26),
+                    accent.withValues(alpha: .08),
+                  ],
+                )
+              : null,
+          color: selected ? null : Colors.transparent,
+          borderRadius: BorderRadius.circular(13),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: accent.withValues(alpha: .12),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : null,
+        ),
+        child: Stack(
+          children: [
+            if (selected)
+              Positioned(
+                left: 0,
+                top: 10,
+                bottom: 10,
+                child: Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ),
+            ListTile(
+              dense: true,
+              minTileHeight: 48,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              leading: _navigationIcon(icon, accent, selected: selected),
+              title: Text(
+                title,
+                style: TextStyle(
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  color: selected ? Colors.white : Colors.white60,
+                ),
+              ),
+              trailing: selected
+                  ? Icon(Icons.chevron_right_rounded, color: accent, size: 20)
+                  : null,
+              onTap: () => changePage(page),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sidebarActionItem(
+    String title,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
+    const accent = Color(0xFFFFB547);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: ListTile(
+          dense: true,
+          minTileHeight: 50,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          leading: _navigationIcon(icon, accent),
+          title: Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          trailing: const Icon(Icons.open_in_new_rounded,
+              color: Colors.white38, size: 16),
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+
+  Widget _navigationIcon(
+    IconData icon,
+    Color accent, {
+    bool selected = false,
+  }) {
+    return Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accent.withValues(alpha: selected ? .38 : .24),
+            accent.withValues(alpha: selected ? .18 : .09),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: selected ? .20 : .10),
+            blurRadius: 9,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Icon(icon, color: selected ? Colors.white : accent, size: 21),
+    );
+  }
+
+  Color _navigationAccent(int page) {
+    const colors = <int, Color>{
+      0: Color(0xFF5B8CFF), // Dashboard
+      1: Color(0xFFFF5D7A), // Employees
+      2: Color(0xFF35C6F4), // Payroll
+      3: Color(0xFFFFB547), // Attendance
+      6: Color(0xFF54D6A3), // Reports
+      7: Color(0xFF9B8AFB), // Settings
+      8: Color(0xFF4EAFE8), // RHB Layout
+      9: Color(0xFFFF6B6B), // Branch logs
+      10: Color(0xFFCE7BFF), // Employee requests
+      11: Color(0xFF2FD3C4), // OT requests
+      12: Color(0xFF8B7CFF), // Payslips
+    };
+    return colors[page] ?? const Color(0xFF5B8CFF);
+  }
+
+  Widget _drawerItem(
+    String title,
+    IconData icon,
+    int page,
+  ) {
+    final selected = selectedPage == page;
+    final accent = _navigationAccent(page);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      child: Container(
+        decoration: BoxDecoration(
+          color: selected ? accent.withValues(alpha: .10) : Colors.transparent,
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: ListTile(
+          minTileHeight: 52,
+          leading: _navigationIcon(icon, accent, selected: selected),
+          title: Text(
+            title,
+            style: TextStyle(
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+              color: selected ? accent : const Color(0xFF343746),
+            ),
+          ),
+          trailing: selected
+              ? Icon(Icons.chevron_right_rounded, color: accent, size: 20)
+              : null,
+          onTap: () {
+            Navigator.pop(context);
+            changePage(page);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _drawerActionItem(
+    String title,
+    IconData icon, {
+    required VoidCallback onTap,
+  }) {
+    const accent = Color(0xFFFFA726);
+    return ListTile(
+      leading: _navigationIcon(icon, accent),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+      trailing: const Icon(Icons.open_in_new_rounded, size: 17),
+      onTap: onTap,
+    );
+  }
+
+  // ===========================================================================
+  // TOP BAR
+  // ===========================================================================
+
+  Widget _topBar() {
+    return Container(
+        height: 72,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: adminBorder))),
+        child: Row(children: [
+          Text(_pageTitle(),
+              style: const TextStyle(
+                  color: adminInk, fontWeight: FontWeight.w700, fontSize: 19)),
+          const Spacer(),
+          IconButton(
+              tooltip: 'Send notification',
+              onPressed: _showNotificationComposer,
+              icon: const Icon(Icons.notifications_none, color: adminInk)),
+          const AppReloadButton(color: adminInk),
+          const SizedBox(width: 16),
+          const CircleAvatar(
+              radius: 17,
+              backgroundColor: Color(0xFFF1E7D3),
+              child: Icon(Icons.person_outline, color: adminInk, size: 20)),
+          const SizedBox(width: 9),
+          Text(_adminScopeName,
+              style: const TextStyle(
+                  color: adminInk, fontWeight: FontWeight.w600)),
+          IconButton(
+              tooltip: 'Settings',
+              onPressed: () => changePage(7),
+              icon: const Icon(Icons.keyboard_arrow_down, color: adminInk)),
+        ]));
+  }
+
+  Future<void> _changeEmployeeStatus(
+    Map<String, dynamic> employee,
+    bool isActive,
+  ) async {
+    final employeeId = employee['employee_id'] ?? employee['id'];
+    if (employeeId == null) {
+      throw Exception('Employee ID was not found.');
+    }
+
+    await service.updateEmployeeActiveStatus(
+      employeeId: employeeId,
+      isActive: isActive,
+    );
+
+    if (!mounted) return;
+    employee['is_active'] = isActive;
+    setState(() {
+      _adminEmployeesFuture = null;
+      _employeeRowsAt = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${employee['name'] ?? 'Employee'} is now '
+          '${isActive ? 'Active' : 'Resigned. Automatic deletion is scheduled after 90 days.'}',
+        ),
+      ),
+    );
+  }
+
+  void _showEmployeeDetails(
+    String title,
+    List<Map<String, dynamic>> employees,
+  ) {
+    var showActive = true;
+    var showInactive = true;
+    var search = '';
+    final searchController = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final query = search.toLowerCase();
+          final list = employees.where((employee) {
+            final active = _isActive(employee);
+            if ((active && !showActive) || (!active && !showInactive)) {
+              return false;
+            }
+            if (query.isEmpty) return true;
+            return [
+              'name',
+              'employee_id',
+              'department',
+              'designation',
+              'branch_id'
+            ].any((key) => (employee[key]?.toString().toLowerCase() ?? '')
+                .contains(query));
+          }).toList();
+          return SafeArea(
+            child: SizedBox(
+              height: MediaQuery.of(context).size.height * .86,
+              child: Column(children: [
+                ListTile(
+                  title: Text(title,
+                      style: const TextStyle(
+                          fontSize: 22, fontWeight: FontWeight.w800)),
+                  trailing: IconButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    icon: const Icon(Icons.close),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TextField(
+                    controller: searchController,
+                    onChanged: (value) =>
+                        setSheetState(() => search = value.trim()),
+                    decoration: InputDecoration(
+                      hintText:
+                          'Search name, Employee ID, department or branch',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: search.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () {
+                                searchController.clear();
+                                setSheetState(() => search = '');
+                              },
+                            ),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(spacing: 10, children: [
+                  FilterChip(
+                    selected: showActive,
+                    label: const Text('Active'),
+                    avatar: const Icon(Icons.check_circle, size: 18),
+                    onSelected: (value) =>
+                        setSheetState(() => showActive = value),
+                  ),
+                  FilterChip(
+                    selected: showInactive,
+                    label: const Text('Inactive'),
+                    avatar: const Icon(Icons.person_off, size: 18),
+                    onSelected: (value) =>
+                        setSheetState(() => showInactive = value),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: list.isEmpty
+                      ? const Center(child: Text('No employees found.'))
+                      : ListView.builder(
+                          itemCount: list.length,
+                          itemBuilder: (_, index) {
+                            final employee = list[index];
+                            final active = _isActive(employee);
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 5),
+                              child: ListTile(
+                                onTap: () => _showSupabaseEmployee(employee),
+                                title: Text(
+                                    employee['name']?.toString() ?? 'Employee',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold)),
+                                subtitle: Text([
+                                  employee['employee_id']?.toString() ?? '-',
+                                  employee['department']?.toString() ?? '',
+                                  employee['branch_id']?.toString() ?? '',
+                                ]
+                                    .where((value) => value.isNotEmpty)
+                                    .join(' • ')),
+                                trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Checkbox(
+                                        value: active,
+                                        onChanged: (value) async {
+                                          if (value == null) return;
+                                          try {
+                                            await _changeEmployeeStatus(
+                                                employee, value);
+                                            if (sheetContext.mounted) {
+                                              setSheetState(() {});
+                                            }
+                                          } catch (error) {
+                                            if (sheetContext.mounted) {
+                                              ScaffoldMessenger.of(sheetContext)
+                                                  .showSnackBar(
+                                                SnackBar(
+                                                    content: Text(
+                                                        'Status update failed: $error')),
+                                              );
+                                            }
+                                          }
+                                        },
+                                      ),
+                                      Text(active ? 'Active' : 'Resigned'),
+                                    ]),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ]),
+            ),
+          );
+        },
+      ),
+    ).whenComplete(searchController.dispose);
+  }
+
+  Future<Map<String, dynamic>> _loadDashboardData() async {
+    // Keep the existing dashboard UI and data shape while reading from Neon.
+    // Do not fall back to Supabase: its quota restriction is the reason
+    // this dashboard previously failed to load.
+    final session = NeonApi.sessionVersion;
+    final results =
+        await service.loadNeonAdminDashboard(selectedDashboardMonth);
+
+    if (session != NeonApi.sessionVersion)
+      throw StateError('Session changed. Please reopen the dashboard.');
+    var employees = (results['employees'] as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+    var payroll = ((results['payroll_history'] ?? results['payroll']) as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+    final staffScope = service.currentUser?.staffScope?.trim().toLowerCase();
+    if (staffScope == 'local' || staffScope == 'foreign') {
+      employees = employees.where((employee) {
+        final foreign = (employee['address'] ?? '')
+            .toString()
+            .toUpperCase()
+            .contains('FRN');
+        return staffScope == 'foreign' ? foreign : !foreign;
+      }).toList();
+      final allowedIds = employees
+          .map((employee) => (employee['employee_id'] ?? employee['id'] ?? '')
+              .toString()
+              .trim()
+              .toUpperCase())
+          .toSet();
+      payroll = payroll.where((row) {
+        final employeeId = (row['employee_id'] ?? row['employeeId'] ?? '')
+            .toString()
+            .trim()
+            .toUpperCase();
+        return allowedIds.contains(employeeId);
+      }).toList();
+    }
+
+    if (mounted) _rememberEmployeeRows(employees);
+    return {
+      'employees': employees,
+      'payroll': payroll,
+      'branches': (results['branches'] as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList(),
+    };
+  }
+
+  Future<Map<String, dynamic>> _dashboardPageData() {
+    final scope = service.currentUser?.staffScope?.trim().toLowerCase() ?? '';
+    final key = '${selectedDashboardMonth.year}-'
+        '${selectedDashboardMonth.month}|$scope';
+    if (_dashboardDataFuture == null || _dashboardDataFutureKey != key) {
+      _dashboardDataFutureKey = key;
+      _dashboardDataFuture = _loadDashboardData();
+    }
+    return _dashboardDataFuture!;
+  }
+
+  Future<Map<String, dynamic>> _dashboardActivityData() {
+    final today = DateTime.now().toUtc().add(const Duration(hours: 8));
+    final key =
+        '${selectedDashboardMonth.year}-${selectedDashboardMonth.month}|${DateFormat('yyyy-MM-dd').format(today)}|${service.currentUser?.staffScope}';
+    if (_dashboardActivityFuture == null || _dashboardActivityKey != key) {
+      _dashboardActivityKey = key;
+      Future<dynamic> safe(Future<dynamic> future) async {
+        try {
+          return await future;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      dynamic canonical(dynamic value) => value is List
+          ? value
+              .map((row) => {
+                    ...Map<String, dynamic>.from(row as Map),
+                    'branch_id': _dashboardBranchKey(row['branch_id'])
+                  })
+              .toList()
+          : null;
+      final month = selectedDashboardMonth;
+      _dashboardActivityFuture = Future.wait([
+        safe(service.loadNeonAttendance(
+            date: DateFormat('yyyy-MM-dd').format(today))),
+        safe(service.loadLateReport(month).then((r) => r['reports'])),
+        safe(service.fetchLeaveRequestsFromNeon()),
+        safe(service.fetchOtRequestsFromNeon()),
+        safe(SupabaseService.getEmployeeRequests(status: 'PENDING')),
+      ]).then((rows) => {
+            'attendance': canonical(rows[0]),
+            'late': canonical(rows[1]),
+            'leave': canonical(rows[2]),
+            'ot': canonical(rows[3]),
+            'employee': canonical(rows[4]),
+            'staff_scope': service.currentUser?.staffScope,
+          });
+    }
+    return _dashboardActivityFuture!;
+  }
+
+  Future<void> _refreshModernDashboard() async {
+    setState(() {
+      _dashboardDataFuture = null;
+      _dashboardActivityFuture = null;
+    });
+    try {
+      await Future.wait([_dashboardPageData(), _dashboardActivityData()]);
+    } catch (_) {/* The dashboard FutureBuilder presents retry. */}
+  }
+
+  Future<List<dynamic>>? _accountLateCardFuture;
+  String? _accountLateCardKey;
+  Widget _accountAttendanceLatePage() {
+    final month = selectedDashboardMonth;
+    final key = '${month.year}-${month.month}';
+    if (_accountLateCardFuture == null || _accountLateCardKey != key) {
+      _accountLateCardKey = key;
+      _accountLateCardFuture = Future.wait<dynamic>([
+        SupabaseService.getBranches(),
+        SupabaseService.database.from('employees').select(
+            'employee_id,name,branch_id,is_active,department,designation'),
+        service.loadLateReport(month),
+      ]);
+    }
+    return FutureBuilder<List<dynamic>>(
+      future: _accountLateCardFuture,
+      builder: (context, snapshot) {
+        if (snapshot.hasError)
+          return Center(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('Unable to load attendance late data.'),
+            TextButton(
+                onPressed: () => setState(() => _accountLateCardFuture = null),
+                child: const Text('Retry')),
+          ]));
+        if (!snapshot.hasData)
+          return const Center(child: CircularProgressIndicator());
+        final data = snapshot.data!;
+        final branches = <String, String>{
+          for (final raw in data[0] as List)
+            _dashboardBranchKey(raw['id'] ?? raw['branch_id']):
+                (raw['name'] ?? raw['branch_name'] ?? raw['id']).toString(),
+        };
+        final employees = (data[1] as List)
+            .map((raw) => {
+                  ...Map<String, dynamic>.from(raw as Map),
+                  'branch_id': _dashboardBranchKey(raw['branch_id']),
+                })
+            .toList();
+        final reports = ((data[2] as Map)['reports'] as List)
+            .map((raw) => {
+                  ...Map<String, dynamic>.from(raw as Map),
+                  'branch_id': _dashboardBranchKey(raw['branch_id']),
+                })
+            .toList();
+        return RefreshIndicator(
+          onRefresh: () async {
+            setState(() => _accountLateCardFuture = null);
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            child: Align(
+                alignment: Alignment.topLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 900),
+                  child: AdminActivityCards(
+                    month: month,
+                    branch: null,
+                    branchLabels: branches,
+                    employees: employees,
+                    payroll: const [],
+                    lateOnly: true,
+                    activity: Future.value(
+                        {'late': reports, 'staff_scope': 'attendance'}),
+                    onMonth: (value) => setState(() {
+                      selectedDashboardMonth = value;
+                      _accountLateCardFuture = null;
+                    }),
+                    onLate: () {},
+                    onPayroll: () {},
+                  ),
+                )),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _modernLateReportPage() => FutureBuilder<List<Map<String, dynamic>>>(
+      future: _attendanceBranchesFuture ??= SupabaseService.getBranches(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+              child: TextButton(
+                  onPressed: () =>
+                      setState(() => _attendanceBranchesFuture = null),
+                  child: const Text('Unable to load branches. Retry')));
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return LateReportPage(
+            month: selectedDashboardMonth,
+            branches: snapshot.data!,
+            initialBranchId: snapshot.data!
+                .where((b) =>
+                    _dashboardBranchKey(b['id'] ?? b['branch_id']) ==
+                    selectedDashboardBranchId)
+                .map((b) => (b['id'] ?? b['branch_id']).toString())
+                .firstOrNull,
+            embedded: true);
+      });
+
+  Future<List<dynamic>> _payrollPageData() {
+    final key = '${selectedPayrollMonth.year}-${selectedPayrollMonth.month}';
+    if (_payrollPageFuture == null || _payrollPageFutureKey != key) {
+      _payrollPageFutureKey = key;
+      _payrollPageFuture =
+          service.loadNeonPayrollPage(selectedPayrollMonth).then(
+                (data) => [
+                  data['branches'],
+                  data['employees'],
+                  data['payroll'],
+                  data['salary_defaults'],
+                  data['attendance'],
+                ],
+              );
+    }
+    return _payrollPageFuture!;
+  }
+
+  bool _isActive(Map<String, dynamic> employee) {
+    final value = employee['is_active'];
+    if (value is bool) return value;
+    return value?.toString().toLowerCase() == 'true';
+  }
+
+  String _employmentStatus(Map<String, dynamic> employee) {
+    final status =
+        employee['employment_status']?.toString().trim().toLowerCase();
+    if (const {'active', 'resigned', 'transferred', 'vacation'}
+        .contains(status)) {
+      return status!;
+    }
+    return _isActive(employee) ? 'active' : 'resigned';
+  }
+
+  String _employmentStatusLabel(Map<String, dynamic> employee) {
+    return switch (_employmentStatus(employee)) {
+      'resigned' => 'Resigned',
+      'transferred' => 'Transferred',
+      'vacation' => 'Vacation',
+      _ => 'Active',
+    };
+  }
+
+  double _number(dynamic value) {
+    if (value == null) return 0;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString().replaceAll(',', '')) ?? 0;
+  }
+
+  List<Map<String, dynamic>> _upcomingEmployeeEvents(
+    List<Map<String, dynamic>> employees, {
+    required List<String> dateKeys,
+    bool anniversary = false,
+  }) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final events = <Map<String, dynamic>>[];
+    for (final employee in employees) {
+      DateTime? original;
+      for (final key in dateKeys) {
+        original = DateTime.tryParse(employee[key]?.toString() ?? '');
+        if (original != null) break;
+      }
+      if (original == null) continue;
+      if (anniversary && !original.isBefore(today)) continue;
+
+      DateTime occurrence(int year) {
+        final lastDay = DateTime(year, original!.month + 1, 0).day;
+        return DateTime(year, original.month,
+            original.day > lastDay ? lastDay : original.day);
+      }
+
+      var next = occurrence(today.year);
+      if (next.isBefore(today)) next = occurrence(today.year + 1);
+      final days = next.difference(today).inDays;
+      if (days > 3) continue;
+      events.add({
+        'employee_id':
+            (employee['employee_id'] ?? employee['id'] ?? '').toString(),
+        'name': (employee['name'] ?? employee['employee_name'] ?? 'Employee')
+            .toString(),
+        'date': next,
+        'days': days,
+        'years': anniversary ? next.year - original.year : null,
+      });
+    }
+    events.sort((a, b) => (a['date'] as DateTime).compareTo(b['date']));
+    return events;
+  }
+
+  Future<void> _sendCelebrationNotification(
+    Map<String, dynamic> event, {
+    required bool anniversary,
+  }) async {
+    final employeeId = event['employee_id']?.toString().trim() ?? '';
+    final name = event['name']?.toString().trim() ?? 'Employee';
+    if (employeeId.isEmpty) {
+      _message('Unable to send: employee ID is missing.');
+      return;
+    }
+    final days = event['days'] as int? ?? 0;
+    final years = event['years'] as int? ?? 0;
+    final title = anniversary ? 'Work Anniversary' : 'Birthday Wishes';
+    final body = anniversary
+        ? (days == 0
+            ? '🎉 Happy Work Anniversary, $name! 🏆\nCongratulations on completing $years ${years == 1 ? 'year' : 'years'} with Payroll Company. Thank you for your dedication, hard work, and the difference you make every day. Wishing you continued growth and success!\n— From all of us at Payroll Company 💙'
+            : 'Hi $name, your $years-year work anniversary is coming up in $days day${days == 1 ? '' : 's'}!')
+        : (days == 0
+            ? '🎂 Happy Birthday, $name! 🎉\nWishing you good health, happiness, and a wonderful year ahead. Thank you for being part of the Payroll Company family. Enjoy your special day!\n— From all of us at Payroll Company 💙'
+            : 'Hi $name, your birthday is coming up in $days day${days == 1 ? '' : 's'}!');
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Send $title?'),
+        content: Text('$body\n\nThis will be sent directly to $name.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.send_outlined),
+            label: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      final delivery = await NotificationService.sendWithResult(
+        title: title,
+        body: body,
+        audience: 'employee',
+        employeeId: employeeId,
+        type: anniversary ? 'work_anniversary' : 'birthday',
+      );
+      if (mounted) _message(delivery.message);
+    } catch (error) {
+      if (mounted) _message('Unable to send notification: $error');
+    }
+  }
+
+  void _showDepartmentFlow(List<Map<String, dynamic>> employees) {
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final employee in employees) {
+      final name = (employee['department'] ?? '').toString().trim();
+      if (name.isEmpty) continue;
+      groups.putIfAbsent(name, () => []).add(employee);
+    }
+    final names = groups.keys.toList()..sort();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * .82,
+          child: Column(children: [
+            ListTile(
+              title: const Text('Departments',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+              subtitle: Text('${names.length} department(s)'),
+              trailing: IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context)),
+            ),
+            const Divider(height: 1),
+            Expanded(
+                child: names.isEmpty
+                    ? const Center(child: Text('No departments found.'))
+                    : GridView.builder(
+                        padding: const EdgeInsets.all(16),
+                        gridDelegate:
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                                maxCrossAxisExtent: 260,
+                                mainAxisExtent: 130,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12),
+                        itemCount: names.length,
+                        itemBuilder: (_, index) {
+                          final name = names[index];
+                          final list = groups[name]!;
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () {
+                              Navigator.pop(context);
+                              _showEmployeeDetails(name, list);
+                            },
+                            child: Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(Icons.business_center_outlined,
+                                          color: Color(0xFF8B5CF6)),
+                                      const Spacer(),
+                                      Text(name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w800)),
+                                      const SizedBox(height: 4),
+                                      Text('${list.length} staff'),
+                                    ]),
+                              ),
+                            ),
+                          );
+                        },
+                      )),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  String _branchLabel(Map<String, dynamic> employee) {
+    final value = employee['branch_name'] ??
+        employee['branch'] ??
+        employee['branch_id'] ??
+        'Unassigned';
+    final text = value.toString().trim();
+    return text.isEmpty ? 'Unassigned' : text;
+  }
+
+  String _dashboardBranchKey(dynamic value) {
+    final raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty) return '';
+    return service.getBranch(raw)?.id.toUpperCase() ?? raw.toUpperCase();
+  }
+
+  void _showBranchFlow(List<Map<String, dynamic>> employees) {
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final employee in employees) {
+      final name = _branchLabel(employee);
+      groups.putIfAbsent(name, () => []).add(employee);
+    }
+    final names = groups.keys.toList()..sort();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * .82,
+          child: Column(children: [
+            ListTile(
+              title: const Text('Branches',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+              subtitle: Text('${names.length} branch(es)'),
+              trailing: IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context)),
+            ),
+            const Divider(height: 1),
+            Expanded(
+                child: GridView.builder(
+              padding: const EdgeInsets.all(16),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 260,
+                  mainAxisExtent: 130,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12),
+              itemCount: names.length,
+              itemBuilder: (_, index) {
+                final name = names[index];
+                final list = groups[name]!;
+                return InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showEmployeeDetails(name, list);
+                  },
+                  child: Card(
+                      child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.account_tree_outlined,
+                              color: Color(0xFFEF4444)),
+                          const Spacer(),
+                          Text(name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 4),
+                          Text('${list.length} employee(s)'),
+                        ]),
+                  )),
+                );
+              },
+            )),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  void _showPayrollFlow(
+    List<Map<String, dynamic>> employees,
+    List<Map<String, dynamic>> payroll, {
+    required String title,
+    required String metric,
+  }) {
+    final now = DateTime.now();
+    int? selectedYear;
+    int? selectedMonth;
+    String? selectedBranch;
+    final branches = employees.map(_branchLabel).toSet().toList()..sort();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final years =
+              List<int>.generate(now.year - 2022 + 1, (i) => now.year - i);
+          final branchEmployees = selectedBranch == null
+              ? <Map<String, dynamic>>[]
+              : employees
+                  .where((e) => _branchLabel(e) == selectedBranch)
+                  .toList();
+          return SafeArea(
+              child: SizedBox(
+            height: MediaQuery.of(context).size.height * .88,
+            child: Column(children: [
+              ListTile(
+                title: Text(title,
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.w800)),
+                subtitle: const Text(
+                    'Select Year â†’ Month â†’ Branch â†’ Employees'),
+                trailing: IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(sheetContext)),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                  child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('1. Select Year',
+                          style: TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 10),
+                      Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: years
+                              .map((year) => ChoiceChip(
+                                    label: Text(year.toString()),
+                                    selected: selectedYear == year,
+                                    onSelected: (_) => setSheetState(() {
+                                      selectedYear = year;
+                                      selectedMonth = null;
+                                      selectedBranch = null;
+                                    }),
+                                  ))
+                              .toList()),
+                      if (selectedYear != null) ...[
+                        const SizedBox(height: 24),
+                        const Text('2. Select Month',
+                            style: TextStyle(fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 10),
+                        Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: List.generate(
+                                12,
+                                (i) => ChoiceChip(
+                                      label: Text(DateFormat('MMMM').format(
+                                          DateTime(selectedYear!, i + 1))),
+                                      selected: selectedMonth == i + 1,
+                                      onSelected: (_) => setSheetState(() {
+                                        selectedMonth = i + 1;
+                                        selectedBranch = null;
+                                      }),
+                                    ))),
+                      ],
+                      if (selectedMonth != null) ...[
+                        const SizedBox(height: 24),
+                        const Text('3. Select Branch',
+                            style: TextStyle(fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 10),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: branches
+                                .map((branch) => Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: _employeeBranchFilterButton(
+                                        label: branch,
+                                        selected: selectedBranch == branch,
+                                        onTap: () => setSheetState(
+                                          () => selectedBranch = branch,
+                                        ),
+                                      ),
+                                    ))
+                                .toList(),
+                          ),
+                        ),
+                      ],
+                      if (selectedBranch != null) ...[
+                        const SizedBox(height: 24),
+                        Text('4. Employees â€” $selectedBranch',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 10),
+                        if (branchEmployees.isEmpty)
+                          const Text('No employees found for this branch.')
+                        else
+                          ...branchEmployees.map((employee) {
+                            final name =
+                                (employee['name'] ?? 'Employee').toString();
+                            final code = (employee['employee_id'] ??
+                                    employee['id'] ??
+                                    '')
+                                .toString();
+                            return Card(
+                                child: ListTile(
+                              leading:
+                                  const CircleAvatar(child: Icon(Icons.person)),
+                              title: Text(name),
+                              subtitle: Text(code),
+                              trailing: metric == 'generate'
+                                  ? ElevatedButton(
+                                      onPressed: () {
+                                        Navigator.pop(sheetContext);
+                                        changePage(2);
+                                      },
+                                      child: const Text('Generate'))
+                                  : Text(metric == 'net' ? 'Net' : 'Gross',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w700)),
+                            ));
+                          }),
+                      ],
+                    ]),
+              )),
+            ]),
+          ));
+        },
+      ),
+    );
+  }
+
+  Widget _dashboardPage() {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _dashboardPageData(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('Unable to load dashboard.'),
+            TextButton(
+                onPressed: () => setState(() => _dashboardDataFuture = null),
+                child: const Text('Retry')),
+          ]));
+        }
+
+        final data = snapshot.data ?? {};
+        final employees =
+            data['employees'] as List<Map<String, dynamic>>? ?? [];
+        final payroll = data['payroll'] as List<Map<String, dynamic>>? ?? [];
+        final branchRows =
+            data['branches'] as List<Map<String, dynamic>>? ?? [];
+        final employeeBranchIds = <String, String>{
+          for (final employee in employees)
+            (employee['employee_id'] ?? employee['id'] ?? '').toString().trim():
+                _dashboardBranchKey(_payrollBranchIdFromEmployee(employee)),
+        };
+        final dashboardBranches = <String, String>{
+          for (final branch in service.branches)
+            _dashboardBranchKey(branch.id): branch.name,
+        };
+        for (final branch in branchRows) {
+          final id =
+              (branch['id'] ?? branch['branch_id'] ?? '').toString().trim();
+          if (id.isEmpty) continue;
+          final key = _dashboardBranchKey(id);
+          dashboardBranches[key] = service.getBranch(id)?.name ??
+              (branch['name'] ?? branch['branch_name'] ?? id).toString().trim();
+        }
+        for (final branchId in employeeBranchIds.values) {
+          if (branchId.isNotEmpty) {
+            dashboardBranches.putIfAbsent(branchId, () => branchId);
+          }
+        }
+        final periodPayroll = payroll
+            .where((row) => _payrollPeriodMatchesMonth(
+                  row['period'],
+                  selectedDashboardMonth,
+                ))
+            .where((row) {
+          if (selectedDashboardBranchId == null) return true;
+          final payrollBranchId = _dashboardBranchKey(row['branch_id']);
+          final employeeId =
+              (row['employee_id'] ?? row['employeeId'] ?? '').toString().trim();
+          final branchId = payrollBranchId.isNotEmpty
+              ? payrollBranchId
+              : employeeBranchIds[employeeId] ?? '';
+          return branchId == selectedDashboardBranchId;
+        }).toList();
+
+        final selectedActiveEmployees = employees.where((employee) {
+          if (!_isActive(employee)) return false;
+          if (selectedDashboardBranchId == null) return true;
+          return _dashboardBranchKey(_payrollBranchIdFromEmployee(employee)) ==
+              selectedDashboardBranchId;
+        }).toList();
+        bool isManagement(Map<String, dynamic> employee) {
+          final value = employee['is_management_staff'];
+          return value == true || value?.toString().toLowerCase() == 'true';
+        }
+
+        bool isTempId(Map<String, dynamic> employee) {
+          final employeeId = employee['employee_id'] ?? employee['id'] ?? '';
+          return employeeId.toString().toUpperCase().contains('TEMP');
+        }
+
+        bool isForeign(Map<String, dynamic> employee) =>
+            (employee['address'] ?? '')
+                .toString()
+                .toUpperCase()
+                .contains('FRN');
+
+        final activeManagementEmployees =
+            selectedActiveEmployees.where(isManagement).toList();
+        final activeTempEmployees = selectedActiveEmployees
+            .where((employee) => !isManagement(employee) && isTempId(employee))
+            .toList();
+        final activeForeignEmployees = selectedActiveEmployees
+            .where((employee) =>
+                !isManagement(employee) &&
+                !isTempId(employee) &&
+                isForeign(employee))
+            .toList();
+        final activeLocalEmployees = selectedActiveEmployees
+            .where((employee) =>
+                !isManagement(employee) &&
+                !isTempId(employee) &&
+                !isForeign(employee))
+            .toList();
+
+        final upcomingBirthdays = _upcomingEmployeeEvents(
+          selectedActiveEmployees,
+          dateKeys: const ['birthday', 'date_of_birth'],
+        );
+        final upcomingAnniversaries = _upcomingEmployeeEvents(
+          selectedActiveEmployees,
+          dateKeys: const ['joining_date', 'joiningDate'],
+          anniversary: true,
+        );
+
+        double sumField(String key) => periodPayroll.fold<double>(
+              0,
+              (sum, row) => sum + _number(row[key]),
+            );
+        final basicPay = periodPayroll.fold<double>(
+          0,
+          (sum, row) => sum + _payrollSalaryBase(row),
+        );
+        final allowances = periodPayroll.fold<double>(
+          0,
+          (sum, row) =>
+              sum +
+              _number(row['elaun_kedatangan']) +
+              _number(row['elaun_perkhidmatan']) +
+              _number(row['elaun_kerajinan']) +
+              _number(row['elaun_makanan']),
+        );
+        final overtime = sumField('overtime');
+        final bonus = sumField('bonus');
+        final epf = sumField('epf_employee');
+        final epfEmployer = sumField('epf_employer');
+        final socso = sumField('socso_employee');
+        final socsoEmployer = sumField('socso_employer');
+        final eis = sumField('eis_employee');
+        final eisEmployer = sumField('eis_employer');
+        final pcb = sumField('pcb');
+        final employerContributions = sumField('epf_employer') +
+            sumField('socso_employer') +
+            sumField('eis_employer');
+        final totalGross = periodPayroll.fold<double>(
+          0,
+          (sum, row) => sum + _payrollTotalEarnings(row),
+        );
+        final totalDeductions = periodPayroll.fold<double>(
+            0, (sum, row) => sum + SavedPayrollAmounts.fromRow(row).deductions);
+        final totalNet = periodPayroll.fold<double>(
+            0, (sum, row) => sum + SavedPayrollAmounts.finalNetPay(row));
+        final hrdfLevy = periodPayroll.fold<double>(0, (sum, row) {
+          final employee = employees
+              .where((e) =>
+                  _dashboardBranchKey(e['employee_id'] ?? e['id']) ==
+                  _dashboardBranchKey(row['employee_id']))
+              .firstOrNull;
+          if (employee == null) return sum;
+          bool flag(String field) =>
+              employee[field] == true ||
+              employee[field]?.toString().toLowerCase() == 'true';
+          if (isForeign(employee) ||
+              flag('is_management_staff') ||
+              flag('is_temp_staff') ||
+              flag('is_support_staff')) return sum;
+          return sum +
+              (_number(row['basic_salary']) -
+                          _number(row['unpaid_deduction']) -
+                          _number(row['late_deduction']))
+                      .clamp(0, double.infinity)
+                      .toDouble() *
+                  .01;
+        });
+
+        return _classicDashboard(
+          month: selectedDashboardMonth,
+          branch: selectedDashboardBranchId,
+          branches: dashboardBranches,
+          employees: employees
+              .map((e) => {
+                    ...e,
+                    'branch_id':
+                        _dashboardBranchKey(_payrollBranchIdFromEmployee(e))
+                  })
+              .toList(),
+          gross: totalGross,
+          deductions: totalDeductions,
+          net: totalNet,
+          activity: _dashboardActivityData(),
+          onMonth: (value) => setState(() => selectedDashboardMonth = value),
+          onBranch: (value) =>
+              setState(() => selectedDashboardBranchId = value),
+          onRefresh: _refreshModernDashboard,
+          onNavigate: (page) {
+            if (page == 2) selectedPayrollMonth = selectedDashboardMonth;
+            if (page == 6) selectedReportMonth = selectedDashboardMonth;
+            if (page == 12) selectedPayslipMonth = selectedDashboardMonth;
+            if (page == 3) {
+              selectedAttendanceMonth =
+                  DateTime.now().toUtc().add(const Duration(hours: 8));
+            }
+            changePage(page);
+          },
+          onLateReport: () => changePage(18),
+          onGross: () => _showPayrollFlow(employees, periodPayroll,
+              title: 'Gross Payroll', metric: 'gross'),
+          onNet: () => _showPayrollFlow(employees, periodPayroll,
+              title: 'Net Payroll', metric: 'net'),
+          birthdays: upcomingBirthdays,
+          anniversaries: upcomingAnniversaries,
+          onCelebrate: (person, anniversary) =>
+              _sendCelebrationNotification(person, anniversary: anniversary),
+          reports: AdminDashboardReportCards(itemBuilder: (width, report) {
+            final bytes = switch (report) {
+              'EPF' => dashboardEpfLogoBytes,
+              'SOCSO' => dashboardSocsoLogoBytes,
+              'EIS' => dashboardEisLogoBytes,
+              'HRDF' => dashboardHrdfLogoBytes,
+              _ => null
+            };
+            final icon = switch (report) {
+              'EPF' => Icons.savings_outlined,
+              'SOCSO' => Icons.health_and_safety_outlined,
+              'EIS' => Icons.shield_outlined,
+              'HRDF' => Icons.account_balance_outlined,
+              'Payroll Summary' => Icons.summarize_outlined,
+              _ => Icons.payments_outlined
+            };
+            final amount = switch (report) {
+              'Payroll' => totalNet,
+              'EPF' => epf + epfEmployer,
+              'SOCSO' => socso + socsoEmployer,
+              'EIS' => eis + eisEmployer,
+              'Payroll Summary' => totalGross,
+              'HRDF' => hrdfLevy,
+              _ => null
+            };
+            String rm(double value) => NumberFormat.currency(
+                    locale: 'en_MY', symbol: 'RM ', decimalDigits: 2)
+                .format(value);
+            final caption = switch (report) {
+              'Payroll' =>
+                '${periodPayroll.length} saved records · Net payroll',
+              'Payroll Summary' =>
+                'Gross payroll · Deductions ${rm(totalDeductions)}',
+              'EPF' => 'Employee ${rm(epf)}\nEmployer ${rm(epfEmployer)}',
+              'SOCSO' => 'Employee ${rm(socso)}\nEmployer ${rm(socsoEmployer)}',
+              'EIS' => 'Employee ${rm(eis)}\nEmployer ${rm(eisEmployer)}',
+              'HRDF' => '1% of eligible levy base',
+              _ => 'Employee + employer'
+            };
+            return IvoryAdminReportCard(
+                width: width,
+                title: report,
+                icon: icon,
+                value: periodPayroll.isEmpty
+                    ? 'No saved payroll'
+                    : amount == null
+                        ? 'Unavailable'
+                        : NumberFormat.currency(
+                                locale: 'en_MY',
+                                symbol: 'RM ',
+                                decimalDigits: 2)
+                            .format(amount),
+                caption: caption,
+                logoBytes: bytes,
+                onTap: () => _openDashboardReport(report));
+          }),
+          workforceHeader:
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            _dashboardFlagsAndClock(),
+            const SizedBox(height: 8),
+            _dashboardWorkforceFlashCards(
+                local: activeLocalEmployees,
+                temp: activeTempEmployees,
+                management: activeManagementEmployees,
+                foreign: activeForeignEmployees,
+                total: selectedActiveEmployees),
+          ]),
+          analytics: AdminAnalytics(
+            month: selectedDashboardMonth,
+            branch: selectedDashboardBranchId,
+            branches: dashboardBranches,
+            employees: employees
+                .map((e) => {
+                      ...e,
+                      'branch_id':
+                          _dashboardBranchKey(_payrollBranchIdFromEmployee(e))
+                    })
+                .toList(),
+            payroll: payroll,
+            activity: _dashboardActivityData(),
+            grossOf: _payrollTotalEarnings,
+            baseOf: _payrollSalaryBase,
+          ),
+          tools: _dashboardActionDock(),
+          breakdown: _dashboardCommandHero(
+            totalGross: totalGross,
+            totalNet: totalNet,
+            basicPay: basicPay,
+            allowances: allowances,
+            overtime: overtime,
+            bonus: bonus,
+            totalDeductions: totalDeductions,
+            epf: epf,
+            epfEmployer: epfEmployer,
+            socso: socso,
+            socsoEmployer: socsoEmployer,
+            eis: eis,
+            eisEmployer: eisEmployer,
+            pcb: pcb,
+            employerContributions: employerContributions,
+            payrollRecords: periodPayroll.length,
+            activeLocalEmployees: activeLocalEmployees,
+            activeTempEmployees: activeTempEmployees,
+            activeManagementEmployees: activeManagementEmployees,
+            activeForeignEmployees: activeForeignEmployees,
+            selectedActiveEmployees: selectedActiveEmployees,
+            availableYears: payroll
+                .map((row) =>
+                    DateTime.tryParse((row['period'] ?? '').toString()))
+                .whereType<DateTime>()
+                .map((date) => date.year)
+                .toSet()
+                .toList()
+              ..sort((a, b) => b.compareTo(a)),
+            branchOptions: dashboardBranches,
+            compact: MediaQuery.sizeOf(context).width < 720,
+            onGrossTap: () => _showPayrollFlow(
+              employees,
+              periodPayroll,
+              title: 'Gross Payroll',
+              metric: 'gross',
+            ),
+            onNetTap: () => _showPayrollFlow(
+              employees,
+              periodPayroll,
+              title: 'Net Payroll',
+              metric: 'net',
+            ),
+          ),
+          payrollRecords: payroll,
+        );
+      },
+    );
+  }
+
+  Widget _classicDashboard({
+    required DateTime month,
+    required String? branch,
+    required Map<String, String> branches,
+    required List<Map<String, dynamic>> employees,
+    required double gross,
+    required double deductions,
+    required double net,
+    required Future<Map<String, dynamic>> activity,
+    required ValueChanged<DateTime> onMonth,
+    required ValueChanged<String?> onBranch,
+    required ValueChanged<int> onNavigate,
+    required Future<void> Function() onRefresh,
+    required VoidCallback onLateReport,
+    required VoidCallback onGross,
+    required VoidCallback onNet,
+    required List<Map<String, dynamic>> birthdays,
+    required List<Map<String, dynamic>> anniversaries,
+    required void Function(Map<String, dynamic>, bool) onCelebrate,
+    required Widget reports,
+    required Widget tools,
+    required Widget breakdown,
+    Widget? analytics,
+    Widget? workforceHeader,
+    required List<Map<String, dynamic>> payrollRecords,
+  }) =>
+      ModernAdminOverview(
+        month: month,
+        branch: branch,
+        branches: branches,
+        employees: employees,
+        gross: gross,
+        deductions: deductions,
+        net: net,
+        activity: activity,
+        onMonth: onMonth,
+        onBranch: onBranch,
+        onNavigate: onNavigate,
+        onRefresh: onRefresh,
+        onLateReport: onLateReport,
+        onGross: onGross,
+        onNet: onNet,
+        birthdays: birthdays,
+        anniversaries: anniversaries,
+        onCelebrate: onCelebrate,
+        reports: reports,
+        tools: tools,
+        breakdown: breakdown,
+        payrollRecords: payrollRecords,
+        analytics: analytics,
+        workforceHeader: workforceHeader,
+      );
+
+  Widget _dashboardCommandHero({
+    required double totalGross,
+    required double totalNet,
+    required double basicPay,
+    required double allowances,
+    required double overtime,
+    required double bonus,
+    required double totalDeductions,
+    required double epf,
+    required double epfEmployer,
+    required double socso,
+    required double socsoEmployer,
+    required double eis,
+    required double eisEmployer,
+    required double pcb,
+    required double employerContributions,
+    required int payrollRecords,
+    required List<Map<String, dynamic>> activeLocalEmployees,
+    required List<Map<String, dynamic>> activeTempEmployees,
+    required List<Map<String, dynamic>> activeManagementEmployees,
+    required List<Map<String, dynamic>> activeForeignEmployees,
+    required List<Map<String, dynamic>> selectedActiveEmployees,
+    required List<int> availableYears,
+    required Map<String, String> branchOptions,
+    required bool compact,
+    required VoidCallback onGrossTap,
+    required VoidCallback onNetTap,
+  }) {
+    final theme = _portalTheme;
+    final period = DateFormat('MMMM yyyy').format(selectedDashboardMonth);
+    final currentYear = DateTime.now().year;
+    final dashboardYears = currentYear >= 2023
+        ? List<int>.generate(currentYear - 2023 + 1, (index) => 2023 + index)
+        : <int>[currentYear];
+    final years = {
+      ...dashboardYears,
+      ...availableYears,
+      selectedDashboardMonth.year,
+    }.toList()
+      ..sort((a, b) => b.compareTo(a));
+    final sortedBranches = branchOptions.entries.toList()
+      ..sort((a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()));
+    final selectedBranchName = selectedDashboardBranchId == null
+        ? 'All branches'
+        : branchOptions[selectedDashboardBranchId] ??
+            selectedDashboardBranchId!;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 16 : 18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .92),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E5EB)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -34,
+            top: -62,
+            child: Container(
+              width: 190,
+              height: 190,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    theme.accent.withValues(alpha: .20),
+                    theme.accent.withValues(alpha: 0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 12,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF73D6AE).withValues(alpha: .12),
+                      borderRadius: BorderRadius.circular(99),
+                      border: Border.all(
+                        color: const Color(0xFF73D6AE).withValues(alpha: .35),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.circle,
+                          color: Color(0xFF73D6AE),
+                          size: 8,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'SYSTEM LIVE',
+                          style: TextStyle(
+                            color: Color(0xFF168653),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    '$period · $selectedBranchName · $payrollRecords payroll records',
+                    style: const TextStyle(color: Colors.black54, fontSize: 12),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Payroll command centre',
+                style: TextStyle(
+                  color: const Color(0xFF20242D),
+                  fontSize: compact ? 27 : 34,
+                  height: 1.05,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -1.1,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Your workforce, payroll and operations — unified in real time.',
+                style: TextStyle(color: Colors.black54, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _dashboardPeriodDropdown(
+                    label: 'Month',
+                    value: selectedDashboardMonth.month,
+                    items: List.generate(12, (index) => index + 1),
+                    itemLabel: (month) =>
+                        DateFormat('MMMM').format(DateTime(2000, month)),
+                    onChanged: (month) => setState(() {
+                      selectedDashboardMonth =
+                          DateTime(selectedDashboardMonth.year, month);
+                    }),
+                  ),
+                  _dashboardPeriodDropdown(
+                    label: 'Year',
+                    value: selectedDashboardMonth.year,
+                    items: years,
+                    itemLabel: (year) => year.toString(),
+                    onChanged: (year) => setState(() {
+                      selectedDashboardMonth =
+                          DateTime(year, selectedDashboardMonth.month);
+                    }),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _dashboardBranchCards(
+                value: selectedDashboardBranchId,
+                branches: sortedBranches,
+                onChanged: (branchId) => setState(
+                  () => selectedDashboardBranchId = branchId,
+                ),
+              ),
+              SizedBox(height: compact ? 16 : 20),
+              LayoutBuilder(builder: (context, constraints) {
+                final columns = constraints.maxWidth >= 1050
+                    ? 4
+                    : constraints.maxWidth >= 620
+                        ? 3
+                        : 2;
+                final width =
+                    (constraints.maxWidth - (10 * (columns - 1))) / columns;
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _compactPayrollMetric(width, 'Basic pay', basicPay,
+                        Icons.badge_outlined, const Color(0xFF1B2234)),
+                    _compactPayrollMetric(width, 'Bonus', bonus,
+                        Icons.card_giftcard_outlined, const Color(0xFFD6B24F)),
+                    _compactPayrollMetric(
+                      width,
+                      'EPF',
+                      epf,
+                      Icons.savings_outlined,
+                      const Color(0xFF1B2234),
+                      employerValue: epfEmployer,
+                      assetName: 'assets/dashboard_epf_kwsp.png',
+                    ),
+                    _compactPayrollMetric(
+                        width,
+                        'Gross payroll',
+                        totalGross,
+                        Icons.account_balance_wallet_outlined,
+                        const Color(0xFFD6B24F),
+                        onTap: onGrossTap),
+                    _compactPayrollMetric(width, 'Allowances', allowances,
+                        Icons.add_card_outlined, const Color(0xFF1B2234)),
+                    _compactPayrollMetric(width, 'Deductions', totalDeductions,
+                        Icons.remove_circle_outline, const Color(0xFFD6B24F)),
+                    _compactPayrollMetric(
+                        width,
+                        'SOCSO',
+                        socso,
+                        Icons.health_and_safety_outlined,
+                        const Color(0xFF1B2234),
+                        employerValue: socsoEmployer,
+                        assetName: 'assets/official_socso_logo.png'),
+                    _compactPayrollMetric(width, 'Net payroll', totalNet,
+                        Icons.payments_outlined, const Color(0xFFD6B24F),
+                        onTap: onNetTap),
+                    _compactPayrollMetric(width, 'Overtime', overtime,
+                        Icons.schedule_outlined, const Color(0xFF1B2234)),
+                    _compactPayrollMetric(width, 'PCB', pcb,
+                        Icons.receipt_long_outlined, const Color(0xFFD6B24F)),
+                    _compactPayrollMetric(
+                      width,
+                      'EIS',
+                      eis,
+                      Icons.shield_outlined,
+                      const Color(0xFF1B2234),
+                      employerValue: eisEmployer,
+                      assetName: 'assets/dashboard_eis_icon.png',
+                    ),
+                    _compactPayrollMetric(
+                      width,
+                      'Employer contributions',
+                      employerContributions,
+                      Icons.business_center_outlined,
+                      const Color(0xFFD6B24F),
+                    ),
+                  ],
+                );
+              }),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dashboardCountryFlags() {
+    const countries = <(String, String, String)>[
+      ('🇲🇾', 'MY', 'Malaysia'),
+      ('🇮🇳', 'IN', 'India'),
+      ('🇮🇩', 'ID', 'Indonesia'),
+      ('🇧🇩', 'BD', 'Bangladesh'),
+      ('🇳🇵', 'NP', 'Nepal'),
+      ('🇲🇲', 'MM', 'Myanmar (Burma)'),
+    ];
+    final visibleCountries = service.currentUser?.isLocalAdmin == true
+        ? countries.where((country) => country.$2 == 'MY').toList()
+        : service.currentUser?.isForeignAdmin == true
+            ? countries.where((country) => country.$2 != 'MY').toList()
+            : countries;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .78),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withValues(alpha: .10)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Wrap(
+        spacing: 7,
+        runSpacing: 7,
+        children: visibleCountries.indexed
+            .map(
+              (entry) => Tooltip(
+                message: entry.$2.$3,
+                child: AnimatedBuilder(
+                  animation: _flagAnimationController,
+                  builder: (context, child) {
+                    final phase =
+                        (_flagAnimationController.value * math.pi * 2) +
+                            (entry.$1 * .72);
+                    return Transform(
+                      alignment: Alignment.center,
+                      transform: Matrix4.identity()
+                        ..setEntry(3, 2, .002)
+                        ..translateByDouble(0, math.sin(phase) * 1.8, 0, 1)
+                        ..rotateY(math.sin(phase) * .16)
+                        ..rotateZ(math.sin(phase + .6) * .035),
+                      child: child,
+                    );
+                  },
+                  child: Container(
+                    width: 43,
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _midnight.withValues(alpha: .045),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(entry.$2.$1,
+                            style: const TextStyle(fontSize: 22, height: 1.05)),
+                        const SizedBox(height: 2),
+                        Text(
+                          entry.$2.$2,
+                          style: const TextStyle(
+                            color: Color(0xFF667085),
+                            fontSize: 8,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: .5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _scopedEmployeeRows(
+    Iterable<Map<String, dynamic>> rows,
+  ) {
+    final staffScope = service.currentUser?.staffScope?.trim().toLowerCase();
+    if (staffScope != 'local' && staffScope != 'foreign') {
+      return rows.map((row) => Map<String, dynamic>.from(row)).toList();
+    }
+    return rows
+        .where((employee) {
+          final foreign = (employee['address'] ?? '')
+              .toString()
+              .toUpperCase()
+              .contains('FRN');
+          return staffScope == 'foreign' ? foreign : !foreign;
+        })
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _loadScopedEmployees() async {
+    // Employee directory uses the same authenticated Neon/Render backend as
+    // the working dashboard. Do not fall back to Supabase when it is limited.
+    final session = NeonApi.sessionVersion;
+    final rows = _scopedEmployeeRows(await service.fetchEmployeeRowsFromNeon());
+    if (session != NeonApi.sessionVersion)
+      throw StateError('Session changed. Please reopen Employees.');
+    if (mounted) _rememberEmployeeRows(rows);
+    return rows;
+  }
+
+  Widget _dashboardFlagsAndClock() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _dashboardCountryFlags(),
+        const _AdminDigitalClock(),
+      ],
+    );
+  }
+
+  Widget _dashboardWorkforceFlashCards({
+    required List<Map<String, dynamic>> local,
+    required List<Map<String, dynamic>> temp,
+    required List<Map<String, dynamic>> management,
+    required List<Map<String, dynamic>> foreign,
+    required List<Map<String, dynamic>> total,
+  }) {
+    Widget card(
+      String label,
+      List<Map<String, dynamic>> employees,
+      IconData icon,
+      Color color,
+    ) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showEmployeeDetails('$label Employees', employees),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 122,
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: color.withValues(alpha: .55)),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: .08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        color.withValues(alpha: .95),
+                        Color.lerp(color, Colors.black, .18)!,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withValues(alpha: .25),
+                        blurRadius: 9,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Icon(icon, size: 20, color: Colors.white),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        employees.length.toString(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF20242D),
+                          fontSize: 19,
+                          height: 1,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          label.toUpperCase(),
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: .35,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        card('Locals', local, Icons.person_outline, const Color(0xFF1B2234)),
+        card('TEMP', temp, Icons.badge_outlined, const Color(0xFFF59E0B)),
+        card('Management', management, Icons.business_center_outlined,
+            const Color(0xFF8B7740)),
+        card('Foreigners', foreign, Icons.public, const Color(0xFFD6B24F)),
+        card('Total', total, Icons.groups_2_outlined, const Color(0xFF169B71)),
+      ],
+    );
+  }
+
+  Widget _compactPayrollMetric(
+    double width,
+    String label,
+    double value,
+    IconData icon,
+    Color accent, {
+    VoidCallback? onTap,
+    double? employerValue,
+    String? assetName,
+  }) {
+    return SizedBox(
+      width: width,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Ink(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E5EB)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  padding: assetName == null
+                      ? EdgeInsets.zero
+                      : const EdgeInsets.all(3),
+                  child: assetName == null
+                      ? Icon(icon, color: accent, size: 23)
+                      : Image.asset(
+                          assetName,
+                          fit: assetName == 'assets/dashboard_epf_kwsp.png'
+                              ? BoxFit.cover
+                              : BoxFit.contain,
+                          alignment:
+                              assetName == 'assets/dashboard_epf_kwsp.png'
+                                  ? Alignment.centerLeft
+                                  : Alignment.center,
+                          errorBuilder: (_, __, ___) =>
+                              Icon(icon, color: accent, size: 21),
+                        ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.black54,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: .8,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      if (employerValue == null)
+                        Text(
+                          _money(value),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF20242D),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        )
+                      else
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _statutoryContributionValue(
+                                'Employee',
+                                value,
+                              ),
+                            ),
+                            Container(
+                              width: 1,
+                              height: 27,
+                              margin: const EdgeInsets.symmetric(horizontal: 8),
+                              color: accent.withValues(alpha: .20),
+                            ),
+                            Expanded(
+                              child: _statutoryContributionValue(
+                                'Employer',
+                                employerValue,
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+                if (onTap != null)
+                  Container(
+                    width: 25,
+                    height: 25,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.chevron_right_rounded,
+                        color: accent, size: 18),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statutoryContributionValue(String label, double value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Colors.black45,
+            fontSize: 8,
+            fontWeight: FontWeight.w800,
+            letterSpacing: .35,
+          ),
+        ),
+        Text(
+          _money(value),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFF20242D),
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _dashboardPeriodDropdown({
+    required String label,
+    required int value,
+    required List<int> items,
+    required String Function(int value) itemLabel,
+    required ValueChanged<int> onChanged,
+  }) {
+    return SizedBox(
+      width: 170,
+      child: DropdownButtonFormField<int>(
+        initialValue: value,
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          filled: true,
+          fillColor: Colors.white.withValues(alpha: .7),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        items: items
+            .map((item) => DropdownMenuItem<int>(
+                  value: item,
+                  child: Text(itemLabel(item)),
+                ))
+            .toList(),
+        onChanged: (next) {
+          if (next != null) onChanged(next);
+        },
+      ),
+    );
+  }
+
+  Widget _dashboardBranchCards({
+    required String? value,
+    required List<MapEntry<String, String>> branches,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final options = <MapEntry<String?, String>>[
+      const MapEntry(null, 'All branches'),
+      ...branches.map((branch) => MapEntry(branch.key, branch.value)),
+    ];
+    return LayoutBuilder(builder: (context, constraints) {
+      final buttons = options
+          .map(
+            (branch) => _employeeBranchFilterButton(
+              label: branch.value,
+              selected: value == branch.key,
+              onTap: () => onChanged(branch.key),
+            ),
+          )
+          .toList();
+      final availablePerButton =
+          (constraints.maxWidth - (5 * (buttons.length - 1))) / buttons.length;
+      if (availablePerButton >= 88) {
+        return Row(
+          children: [
+            for (var index = 0; index < buttons.length; index++) ...[
+              Expanded(child: buttons[index]),
+              if (index != buttons.length - 1) const SizedBox(width: 5),
+            ],
+          ],
+        );
+      }
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (var index = 0; index < buttons.length; index++) ...[
+              buttons[index],
+              if (index != buttons.length - 1) const SizedBox(width: 5),
+            ],
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _dashboardSectionTitle(String title, String subtitle) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 4,
+          height: 38,
+          decoration: BoxDecoration(
+            color: const Color(0xFFD6B24F),
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                color: Color(0xFF252418),
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(subtitle,
+                style:
+                    const TextStyle(color: Color(0xFF64739A), fontSize: 12.5)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _dashboardWorkforceOverview({
+    required bool compact,
+    required List<Map<String, dynamic>> employees,
+    required int activeEmployees,
+    required int inactiveEmployees,
+    required int departments,
+    required List<Map<String, dynamic>> birthdays,
+    required List<Map<String, dynamic>> anniversaries,
+  }) {
+    Widget metrics({required bool stacked}) =>
+        LayoutBuilder(builder: (context, constraints) {
+          final width =
+              stacked ? constraints.maxWidth : (constraints.maxWidth - 10) / 2;
+          return Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _compactWorkforceMetric(
+                width: width,
+                title: 'Total workforce',
+                value: employees.length,
+                icon: Icons.groups_2_outlined,
+                color: const Color(0xFF1B2234),
+                detail: '$departments departments',
+                onTap: () => _showEmployeeDetails('All Employees', employees),
+              ),
+              _compactWorkforceMetric(
+                width: width,
+                title: 'Active employees',
+                value: activeEmployees,
+                icon: Icons.verified_user_outlined,
+                color: const Color(0xFFD6B24F),
+                detail: 'Currently active',
+                onTap: () => _showEmployeeDetails(
+                    'Active Employees', employees.where(_isActive).toList()),
+              ),
+              _compactWorkforceMetric(
+                width: width,
+                title: 'Attention needed',
+                value: inactiveEmployees,
+                icon: Icons.radar_outlined,
+                color: const Color(0xFF1B2234),
+                detail: 'Inactive records',
+                onTap: () => _showEmployeeDetails('Inactive Employees',
+                    employees.where((e) => !_isActive(e)).toList()),
+              ),
+            ],
+          );
+        });
+
+    final events = _dashboardUpcomingEvents(
+      birthdays: birthdays,
+      anniversaries: anniversaries,
+    );
+    if (compact) {
+      return Column(children: [
+        metrics(stacked: false),
+        const SizedBox(height: 12),
+        events
+      ]);
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(flex: 9, child: metrics(stacked: true)),
+        const SizedBox(width: 16),
+        Expanded(flex: 11, child: events),
+      ],
+    );
+  }
+
+  Widget _compactWorkforceMetric({
+    required double width,
+    required String title,
+    required int value,
+    required IconData icon,
+    required Color color,
+    required String detail,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: width,
+      height: 72,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .88),
+              border: Border.all(color: const Color(0xFFE2E5EB)),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: .11),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, color: color, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('$value',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: _midnight,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900)),
+                    Text(title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: _midnight,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800)),
+                    Text(detail,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 10, color: Color(0xFF788195))),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded,
+                  color: color.withValues(alpha: .72), size: 22),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dashboardUpcomingEvents({
+    required List<Map<String, dynamic>> birthdays,
+    required List<Map<String, dynamic>> anniversaries,
+  }) {
+    Widget panel(String title, IconData icon, Color color,
+        List<Map<String, dynamic>> items, bool anniversary) {
+      String timing(int days) => days == 0
+          ? 'Today'
+          : days == 1
+              ? 'Tomorrow'
+              : 'In $days days';
+      return Container(
+        constraints: const BoxConstraints(minHeight: 113),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .88),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E5EB)),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .11),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                if (items.isEmpty)
+                  const Text('No events in the next 3 days',
+                      style: TextStyle(fontSize: 11, color: Colors.black54))
+                else
+                  ...items.map((item) => InkWell(
+                        onTap: () => _sendCelebrationNotification(
+                          item,
+                          anniversary: anniversary,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Row(children: [
+                            Expanded(
+                              child: Text(
+                                '${item['name']} · ${timing(item['days'] as int)}'
+                                '${anniversary ? ' · ${item['years']} years' : ''}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 11.5),
+                              ),
+                            ),
+                            Icon(Icons.send_outlined, size: 15, color: color),
+                          ]),
+                        ),
+                      )),
+              ],
+            ),
+          ),
+        ]),
+      );
+    }
+
+    return Column(children: [
+      panel('Upcoming birthdays', Icons.cake_outlined, _champagne, birthdays,
+          false),
+      const SizedBox(height: 10),
+      panel('Upcoming work anniversaries', Icons.workspace_premium_outlined,
+          _midnight, anniversaries, true),
+    ]);
+  }
+
+  Widget _powerMetricCard({
+    required double width,
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color accent,
+    required String detail,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: width,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Ink(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: .035),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: accent, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(alpha: .11),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: .13),
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      child: Icon(icon, color: accent, size: 19),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      Icons.arrow_outward,
+                      color: accent.withValues(alpha: .65),
+                      size: 18,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF20242D),
+                    fontSize: 23,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -.6,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF20242D),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  detail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.black54, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dashboardActionDock() {
+    return _panel(
+      'Quick actions',
+      Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          _actionButton(
+              'Employees', Icons.groups_2_outlined, () => changePage(1)),
+          _actionButton(
+              'Payroll', Icons.payments_outlined, () => changePage(2)),
+          _actionButton(
+            'Edit Payroll',
+            Icons.edit_note_outlined,
+            _showEditPayrollDialog,
+          ),
+          _actionButton(
+              'Attendance', Icons.schedule_outlined, () => changePage(3)),
+          _actionButton(
+              'Import CSV', Icons.file_upload_outlined, () => changePage(4)),
+          _actionButton(
+              'Reports', Icons.insights_outlined, () => changePage(6)),
+          _actionButton(
+            'OPT. STAT',
+            Icons.rule_folder_outlined,
+            _selectMissingStatutoryReportMonth,
+          ),
+          _actionButton('Notifications', Icons.notifications_active_outlined,
+              _showNotificationComposer),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showNotificationComposer() async {
+    final employees = await _loadScopedEmployees();
+    if (!mounted) return;
+    final titleController = TextEditingController();
+    final bodyController = TextEditingController();
+    var audience = 'all';
+    var type = 'information';
+    String? branchId;
+    String? employeeId;
+    var sending = false;
+    var checkingDelivery = false;
+    String? deliveryStatus;
+    final result = await showDialog<NotificationDelivery>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Send notification'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: audience,
+                    decoration: const InputDecoration(labelText: 'Recipients'),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'all', child: Text('All employees')),
+                      DropdownMenuItem(
+                          value: 'branch', child: Text('One branch')),
+                      DropdownMenuItem(
+                          value: 'employee', child: Text('One employee')),
+                    ],
+                    onChanged: (value) => setDialogState(() {
+                      audience = value ?? 'all';
+                      branchId = null;
+                      employeeId = null;
+                    }),
+                  ),
+                  const SizedBox(height: 12),
+                  if (audience == 'branch')
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(labelText: 'Branch'),
+                      items: service.branches
+                          .map((branch) => DropdownMenuItem(
+                                value: branch.id,
+                                child: Text(branch.name),
+                              ))
+                          .toList(),
+                      onChanged: (value) =>
+                          setDialogState(() => branchId = value),
+                    ),
+                  if (audience == 'employee')
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Employee'),
+                      items: employees
+                          .map((employee) => DropdownMenuItem(
+                                value: employee['employee_id'].toString(),
+                                child: Text(
+                                  '${employee['name'] ?? 'Employee'} (${employee['employee_id']})',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: (value) => setDialogState(() {
+                        employeeId = value;
+                        deliveryStatus = null;
+                      }),
+                    ),
+                  if (audience == 'employee') ...[
+                    TextButton.icon(
+                      icon: const Icon(Icons.info_outline),
+                      label: Text(checkingDelivery
+                          ? 'Checking delivery...'
+                          : 'Check notification delivery'),
+                      onPressed: employeeId == null ||
+                              checkingDelivery ||
+                              sending
+                          ? null
+                          : () async {
+                              setDialogState(() => checkingDelivery = true);
+                              final checkedEmployee = employeeId!;
+                              String result;
+                              try {
+                                result =
+                                    await NotificationService.deliveryStatus(
+                                        checkedEmployee);
+                              } catch (_) {
+                                result =
+                                    'Unable to check delivery. Confirm that the latest backend deployment succeeded, then retry.';
+                              }
+                              if (!dialogContext.mounted) return;
+                              setDialogState(() {
+                                deliveryStatus = employeeId == checkedEmployee
+                                    ? result
+                                    : null;
+                                checkingDelivery = false;
+                              });
+                            },
+                    ),
+                    if (deliveryStatus != null) Text(deliveryStatus!),
+                  ],
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: type,
+                    decoration: const InputDecoration(labelText: 'Type'),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'information', child: Text('Information')),
+                      DropdownMenuItem(
+                          value: 'wish', child: Text('Wish / Greeting')),
+                      DropdownMenuItem(
+                          value: 'payroll', child: Text('Payroll')),
+                    ],
+                    onChanged: (value) =>
+                        setDialogState(() => type = value ?? 'information'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(labelText: 'Title'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: bodyController,
+                    minLines: 3,
+                    maxLines: 5,
+                    decoration: const InputDecoration(labelText: 'Message'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: sending ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: sending
+                  ? null
+                  : () async {
+                      if (titleController.text.trim().isEmpty ||
+                          bodyController.text.trim().isEmpty ||
+                          (audience == 'branch' && branchId == null) ||
+                          (audience == 'employee' && employeeId == null)) {
+                        _message('Complete all notification fields.');
+                        return;
+                      }
+                      setDialogState(() => sending = true);
+                      try {
+                        final delivery =
+                            await NotificationService.sendWithResult(
+                          title: titleController.text,
+                          body: bodyController.text,
+                          audience: audience,
+                          type: type,
+                          branchId: branchId,
+                          employeeId: employeeId,
+                        );
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext, delivery);
+                        }
+                      } catch (error) {
+                        setDialogState(() => sending = false);
+                        _message('Unable to send notification: $error');
+                      }
+                    },
+              icon: sending
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send_outlined),
+              label: Text(sending ? 'Sending...' : 'Send'),
+            ),
+          ],
+        ),
+      ),
+    );
+    titleController.dispose();
+    bodyController.dispose();
+    if (result != null && mounted) _message(result.message);
+  }
+
+  Widget _dashboardPulsePanel({
+    required int employees,
+    required int activeEmployees,
+    required int payrollRecords,
+    required int departments,
+    required VoidCallback onDepartmentsTap,
+    required VoidCallback onPayrollTap,
+  }) {
+    final coverage =
+        employees == 0 ? 0 : (activeEmployees / employees * 100).round();
+    return _panel(
+      'System status',
+      Column(
+        children: [
+          _dashboardPulseRow(
+            Icons.bolt_outlined,
+            'Workforce active',
+            '$coverage%',
+            const Color(0xFF73D6AE),
+          ),
+          _dashboardPulseRow(
+            Icons.receipt_long_outlined,
+            'Payroll records',
+            payrollRecords.toString(),
+            _portalTheme.accent,
+            onTap: onPayrollTap,
+          ),
+          _dashboardPulseRow(
+            Icons.business_center_outlined,
+            'Departments',
+            departments.toString(),
+            const Color(0xFFB79AE2),
+            onTap: onDepartmentsTap,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dashboardPulseRow(
+    IconData icon,
+    String label,
+    String value,
+    Color accent, {
+    VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: accent, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(label,
+                  style: const TextStyle(
+                      color: Color(0xFF596273),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600)),
+            ),
+            Text(
+              value,
+              style: const TextStyle(
+                color: Color(0xFF20242D),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (onTap != null) ...[
+              const SizedBox(width: 5),
+              const Icon(Icons.chevron_right, color: Colors.black38, size: 18),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // ADMIN FLASHCARD
+  // ===========================================================================
+
+  Widget _dashboardFlashCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+    required String cardKey,
+    required double width,
+  }) {
+    final bool selected = selectedDashboardCard == cardKey;
+
+    return SizedBox(
+      width: width,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            setState(() {
+              if (selectedDashboardCard == cardKey) {
+                selectedDashboardCard = null;
+              } else {
+                selectedDashboardCard = cardKey;
+              }
+            });
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: selected ? color : Colors.transparent,
+                width: selected ? 2 : 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: selected
+                      ? color.withValues(alpha: 0.15)
+                      : const Color(0x08000000),
+                  blurRadius: selected ? 16 : 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: color,
+                    size: 27,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.black54,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        value,
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          color: color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  selected ? Icons.keyboard_arrow_up : Icons.chevron_right,
+                  color: Colors.black38,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // FLASHCARD DATA CALCULATIONS
+  // ===========================================================================
+
+  int _departmentCount() {
+    final Set<String> departments = {};
+
+    for (final employee in service.employeesDemo) {
+      final department = employee.department.trim();
+
+      if (department.isNotEmpty) {
+        departments.add(department.toLowerCase());
+      }
+    }
+
+    return departments.length;
+  }
+
+  List<Employee> _employeesForDepartment(
+    String department,
+  ) {
+    return service.employeesDemo.where((employee) {
+      return employee.department.trim().toLowerCase() ==
+          department.trim().toLowerCase();
+    }).toList();
+  }
+
+  List<Employee> _newJoiners() {
+    final now = DateTime.now();
+
+    final sixMonthsAgo = DateTime(
+      now.year,
+      now.month - 6,
+      now.day,
+    );
+
+    return service.employeesDemo.where((employee) {
+      final joiningDate = employee.joiningDate;
+
+      if (joiningDate == null) {
+        return false;
+      }
+
+      final dateOnly = DateTime(
+        joiningDate.year,
+        joiningDate.month,
+        joiningDate.day,
+      );
+
+      final today = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      );
+
+      return !dateOnly.isBefore(sixMonthsAgo) && !dateOnly.isAfter(today);
+    }).toList()
+      ..sort((a, b) {
+        final aDate = a.joiningDate;
+        final bDate = b.joiningDate;
+
+        if (aDate == null && bDate == null) {
+          return 0;
+        }
+
+        if (aDate == null) {
+          return 1;
+        }
+
+        if (bDate == null) {
+          return -1;
+        }
+
+        return bDate.compareTo(aDate);
+      });
+  }
+
+  Set<String> _vacationEmployeeIds() {
+    final Set<String> ids = {};
+
+    for (final record in service.attendance) {
+      if (record.status.trim().toLowerCase() == 'vacation') {
+        ids.add(record.employeeId);
+      }
+    }
+
+    return ids;
+  }
+
+  List<Employee> _vacationEmployees() {
+    final ids = _vacationEmployeeIds();
+
+    return service.employeesDemo.where((employee) {
+      return ids.contains(employee.employeeId);
+    }).toList();
+  }
+
+  List<Employee> _activeEmployees() {
+    return service.employeesDemo
+        .where((employee) => employee.isActive)
+        .toList();
+  }
+
+  // ===========================================================================
+  // FLASHCARD RESULT PANEL
+  // ===========================================================================
+
+  Widget _dashboardFilterResult() {
+    switch (selectedDashboardCard) {
+      case 'departments':
+        return _departmentResultPanel();
+
+      case 'branches':
+        return _branchResultPanel();
+
+      case 'vacation':
+        return _vacationResultPanel();
+
+      case 'active':
+        return _employeeResultPanel(
+          title: 'Active Employees',
+          employees: _activeEmployees(),
+          emptyText: 'No active employees found.',
+          color: const Color(0xFF15965D),
+        );
+
+      case 'new_joiner':
+        return _employeeResultPanel(
+          title: 'New Joiners - Last 6 Months',
+          employees: _newJoiners(),
+          emptyText: 'No employees joined within the last 6 months.',
+          color: const Color(0xFFEF4444),
+          showJoiningDate: true,
+        );
+
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _departmentResultPanel() {
+    final Map<String, List<Employee>> departmentEmployees = {};
+
+    for (final employee in service.employeesDemo) {
+      final department = employee.department.trim();
+
+      if (department.isEmpty) {
+        continue;
+      }
+
+      departmentEmployees.putIfAbsent(
+        department,
+        () => [],
+      );
+
+      departmentEmployees[department]!.add(employee);
+    }
+
+    final departments = departmentEmployees.keys.toList()..sort();
+
+    return _panel(
+      'Departments',
+      departments.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(
+                child: Text(
+                  'No departments found.',
+                ),
+              ),
+            )
+          : Column(
+              children: departments.map((department) {
+                final employees = departmentEmployees[department]!;
+
+                return Card(
+                  elevation: 0,
+                  color: const Color(0xFFF5F7FB),
+                  margin: const EdgeInsets.only(
+                    bottom: 10,
+                  ),
+                  child: ExpansionTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0xFFEAF0FF),
+                      child: Icon(
+                        Icons.business_center_outlined,
+                        color: Color(0xFF315AD9),
+                      ),
+                    ),
+                    title: Text(
+                      department,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${employees.length} employee'
+                      '${employees.length == 1 ? '' : 's'}',
+                    ),
+                    children: employees.map((employee) {
+                      return ListTile(
+                        leading: CircleAvatar(
+                          radius: 17,
+                          backgroundColor: Colors.white,
+                          child: Text(
+                            employee.name.isEmpty
+                                ? '?'
+                                : employee.name.substring(0, 1).toUpperCase(),
+                            style: const TextStyle(
+                              color: Color(0xFF315AD9),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        title: Text(employee.name),
+                        subtitle: Text(
+                          '${employee.employeeId} • '
+                          '${employee.designation}',
+                        ),
+                        trailing: employee.isActive
+                            ? const Chip(
+                                label: Text(
+                                  'Active',
+                                  style: TextStyle(
+                                    color: Color(
+                                      0xFF15965D,
+                                    ),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                backgroundColor: Color(0xFFEAF8F1),
+                                side: BorderSide.none,
+                              )
+                            : const Chip(
+                                label: Text(
+                                  'Inactive',
+                                  style: TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                backgroundColor: Color(0xFFFFEEEE),
+                                side: BorderSide.none,
+                              ),
+                        onTap: () {
+                          _showEmployee(employee);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+
+  Widget _branchResultPanel() {
+    final branches = [...service.branches];
+
+    return _panel(
+      'Branches',
+      branches.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(
+                child: Text(
+                  'No branches found.',
+                ),
+              ),
+            )
+          : Column(
+              children: branches.map((branch) {
+                final employees = service.employeesDemo.where((employee) {
+                  return employee.branchId == branch.id;
+                }).toList();
+
+                return Card(
+                  elevation: 0,
+                  color: const Color(0xFFF5F7FB),
+                  margin: const EdgeInsets.only(
+                    bottom: 10,
+                  ),
+                  child: ExpansionTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0xFFF0EAFF),
+                      child: Icon(
+                        Icons.account_tree_outlined,
+                        color: Color(0xFF8B5CF6),
+                      ),
+                    ),
+                    title: Text(
+                      branch.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${employees.length} employee'
+                      '${employees.length == 1 ? '' : 's'}',
+                    ),
+                    children: employees.isEmpty
+                        ? const [
+                            Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Text(
+                                'No employees assigned to this branch.',
+                              ),
+                            ),
+                          ]
+                        : employees.map((employee) {
+                            return ListTile(
+                              leading: CircleAvatar(
+                                radius: 17,
+                                backgroundColor: Colors.white,
+                                child: Text(
+                                  employee.name.isEmpty
+                                      ? '?'
+                                      : employee.name
+                                          .substring(
+                                            0,
+                                            1,
+                                          )
+                                          .toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Color(0xFF8B5CF6),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              title: Text(employee.name),
+                              subtitle: Text(
+                                '${employee.employeeId} • '
+                                '${employee.department}',
+                              ),
+                              onTap: () {
+                                _showEmployee(employee);
+                              },
+                            );
+                          }).toList(),
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+
+  Widget _vacationResultPanel() {
+    final employees = _vacationEmployees();
+
+    final leaveRecords = service.attendance.where((record) {
+      return record.status.trim().toLowerCase() == 'leave';
+    }).toList()
+      ..sort(
+        (a, b) => b.date.compareTo(a.date),
+      );
+
+    return _panel(
+      'Vacation / Leave Employees',
+      employees.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(
+                child: Text(
+                  'No vacation / leave records found.',
+                ),
+              ),
+            )
+          : Column(
+              children: employees.map((employee) {
+                final employeeLeaves = leaveRecords.where((record) {
+                  return record.employeeId == employee.employeeId;
+                }).toList();
+
+                return Card(
+                  elevation: 0,
+                  color: const Color(0xFFF5F7FB),
+                  margin: const EdgeInsets.only(
+                    bottom: 10,
+                  ),
+                  child: ExpansionTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0xFFFFF3E0),
+                      child: Icon(
+                        Icons.beach_access_outlined,
+                        color: Colors.orange,
+                      ),
+                    ),
+                    title: Text(
+                      employee.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${employee.employeeId} • '
+                      '${employee.department}',
+                    ),
+                    children: employeeLeaves.isEmpty
+                        ? const []
+                        : employeeLeaves.map((record) {
+                            return ListTile(
+                              leading: const Icon(
+                                Icons.event_busy,
+                                color: Colors.orange,
+                              ),
+                              title: Text(
+                                DateFormat(
+                                  'dd MMM yyyy',
+                                ).format(record.date),
+                              ),
+                              subtitle: Text(
+                                '${record.checkIn} - '
+                                '${record.checkOut}',
+                              ),
+                              trailing: _statusChip(
+                                record.status,
+                              ),
+                            );
+                          }).toList(),
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+
+  Widget _employeeResultPanel({
+    required String title,
+    required List<Employee> employees,
+    required String emptyText,
+    required Color color,
+    bool showJoiningDate = false,
+  }) {
+    return _panel(
+      title,
+      employees.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(20),
+              child: Center(
+                child: Text(emptyText),
+              ),
+            )
+          : Column(
+              children: employees.map((employee) {
+                return Card(
+                  elevation: 0,
+                  color: const Color(0xFFF5F7FB),
+                  margin: const EdgeInsets.only(
+                    bottom: 8,
+                  ),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: color.withValues(alpha: 0.10),
+                      child: Text(
+                        employee.name.isEmpty
+                            ? '?'
+                            : employee.name.substring(0, 1).toUpperCase(),
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      employee.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${employee.employeeId} • '
+                      '${employee.department} • '
+                      '${employee.branchId}',
+                    ),
+                    trailing: showJoiningDate
+                        ? Text(
+                            employee.joiningDate == null
+                                ? '-'
+                                : DateFormat(
+                                    'dd MMM yyyy',
+                                  ).format(
+                                    employee.joiningDate!,
+                                  ),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        : null,
+                    onTap: () {
+                      _showEmployee(employee);
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+
+  // ===========================================================================
+  // EMPLOYEES
+  // ===========================================================================
+
+  Widget _employeeDirectoryPanel(String title, Widget child) => Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE1E7F2)),
+            boxShadow: const [
+              BoxShadow(
+                  color: Color(0x0A243D70),
+                  blurRadius: 18,
+                  offset: Offset(0, 7))
+            ]),
+        child: child,
+      );
+
+  Widget _employeesPage() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _employeeDirectoryData(),
+      initialData: _employeeSnapshot,
+      builder: (context, snapshot) {
+        final cachedRows = _employeeSnapshot;
+        // ----------------------------------------------------------
+        // LOADING
+        // ----------------------------------------------------------
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData &&
+            cachedRows == null) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(40),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        // ----------------------------------------------------------
+        // ERROR
+        // ----------------------------------------------------------
+        if (snapshot.hasError && !snapshot.hasData && cachedRows == null) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Employees',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed: _showAddEmployee,
+                      icon: const Icon(Icons.person_add),
+                      label: const Text('Add Employee'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _employeeDirectoryPanel(
+                  'Employee List',
+                  Padding(
+                    padding: const EdgeInsets.all(30),
+                    child: Column(
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          color: Colors.red,
+                          size: 45,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Unable to load employees.',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${snapshot.error}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.black54,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _adminEmployeesFuture = null;
+                              _employeeRowsAt = null;
+                            });
+                          },
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        Widget employeeDetail(
+          String label,
+          dynamic value,
+        ) {
+          return Padding(
+            padding: const EdgeInsets.only(
+              bottom: 10,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 130,
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    value?.toString() ?? '',
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        String missingMonthRanges(List<int> months) {
+          if (months.isEmpty) return 'Complete';
+          final ranges = <String>[];
+          var start = months.first;
+          var end = start;
+          for (final month in months.skip(1)) {
+            if (month == end + 1) {
+              end = month;
+              continue;
+            }
+            ranges.add(start == end
+                ? start.toString().padLeft(2, '0')
+                : '${start.toString().padLeft(2, '0')}–${end.toString().padLeft(2, '0')}');
+            start = end = month;
+          }
+          ranges.add(start == end
+              ? start.toString().padLeft(2, '0')
+              : '${start.toString().padLeft(2, '0')}–${end.toString().padLeft(2, '0')}');
+          return ranges.join(', ');
+        }
+
+        Widget payrollCoverage(String employeeId) {
+          final records = service.employeePayroll(employeeId);
+          if (records.isEmpty) {
+            return const Text(
+              'No payroll / payslip',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF9A6A16),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+              ),
+            );
+          }
+          final now = DateTime.now();
+          // A month's payslip is due on the 5th of the following month.
+          // Before that date it must not be reported as missing.
+          final latestDueMonth = DateTime(
+            now.year,
+            now.month - (now.day >= 5 ? 1 : 2),
+          );
+          final firstYear = records
+              .map((record) => record.period.year)
+              .reduce((a, b) => a < b ? a : b);
+          final monthsByYear = <int, Set<int>>{};
+          for (final record in records) {
+            final netAmount = record.netPay;
+            if (netAmount <= 0) continue;
+            monthsByYear
+                .putIfAbsent(record.period.year, () => <int>{})
+                .add(record.period.month);
+          }
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var year = firstYear; year <= now.year; year++) ...[
+                  if (year > firstYear) const SizedBox(width: 6),
+                  Builder(builder: (context) {
+                    final lastExpectedMonth = year < latestDueMonth.year
+                        ? 12
+                        : year == latestDueMonth.year
+                            ? latestDueMonth.month
+                            : 0;
+                    final available = monthsByYear[year] ?? const <int>{};
+                    final missing = [
+                      for (var month = 1; month <= lastExpectedMonth; month++)
+                        if (!available.contains(month)) month,
+                    ];
+                    final notDue = lastExpectedMonth == 0;
+                    final complete = !notDue && missing.isEmpty;
+                    return Container(
+                      constraints: const BoxConstraints(minWidth: 62),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: notDue
+                            ? const Color(0xFFF1F3F6)
+                            : complete
+                                ? const Color(0xFFE8F7EF)
+                                : const Color(0xFFFFF5DE),
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(
+                          color: notDue
+                              ? const Color(0xFFD5DAE3)
+                              : complete
+                                  ? const Color(0xFFB9E2CB)
+                                  : const Color(0xFFE9CA82),
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(Icons.calendar_month_outlined, size: 10),
+                            const SizedBox(width: 4),
+                            Text('$year',
+                                style: const TextStyle(
+                                    fontSize: 10, fontWeight: FontWeight.w700)),
+                          ]),
+                          Text(
+                            notDue
+                                ? 'Not due yet'
+                                : complete
+                                    ? 'Complete'
+                                    : 'Missing ${missingMonthRanges(missing)}',
+                            style: TextStyle(
+                              fontSize: 8.5,
+                              color: notDue
+                                  ? const Color(0xFF6F7785)
+                                  : complete
+                                      ? const Color(0xFF188653)
+                                      : const Color(0xFF9A6A16),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ],
+            ),
+          );
+        }
+
+        // ----------------------------------------------------------
+        // DATA
+        // ----------------------------------------------------------
+        final allEmployees = snapshot.data ?? cachedRows ?? [];
+        final compactEmployeeView = MediaQuery.sizeOf(context).width < 760;
+        final search = _adminEmployeeSearch.trim().toLowerCase();
+        final branchNames = allEmployees
+            .map((employee) => employee['branch_id']?.toString().trim() ?? '')
+            .where((branch) => branch.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+        final statusCounts = <String, int>{
+          'all': allEmployees.length,
+          for (final status in const [
+            'active',
+            'transferred',
+            'vacation',
+            'resigned'
+          ])
+            status: allEmployees
+                .where((employee) => _employmentStatus(employee) == status)
+                .length,
+        };
+        final employees = allEmployees.where((employee) {
+          final branch = employee['branch_id']?.toString().trim() ?? '';
+          if (_adminEmployeeBranchFilter != null &&
+              branch.toUpperCase() !=
+                  _adminEmployeeBranchFilter!.toUpperCase()) {
+            return false;
+          }
+          if (_adminEmployeeStatusFilter != 'all' &&
+              _employmentStatus(employee) != _adminEmployeeStatusFilter) {
+            return false;
+          }
+          if (search.isEmpty) return true;
+          return [
+            employee['employee_id'],
+            employee['name'],
+            employee['department'],
+            employee['designation'],
+            employee['email'],
+            employee['branch_id'],
+            employee['branch_name'],
+          ].any((value) =>
+              value?.toString().toLowerCase().contains(search) == true);
+        }).toList()
+          ..sort((a, b) {
+            return (a['name']?.toString() ?? '')
+                .toLowerCase()
+                .compareTo((b['name']?.toString() ?? '').toLowerCase());
+          });
+
+        final pageCount = (employees.length / _employeePageSize).ceil();
+        final currentPage = _adminEmployeePage
+            .clamp(0, pageCount > 0 ? pageCount - 1 : 0)
+            .toInt();
+        final visibleEmployees = employees
+            .skip(currentPage * _employeePageSize)
+            .take(_employeePageSize)
+            .toList();
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const LinearProgressIndicator(minHeight: 2),
+              if (cachedRows != null && snapshot.hasError)
+                const Padding(
+                    padding: EdgeInsets.only(bottom: 10),
+                    child: Text(
+                        'Showing saved employee data. Refresh to retry the latest records.')),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final statusFilters = Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    alignment: WrapAlignment.center,
+                    children: const [
+                      ('all', 'All', Icons.people_outline),
+                      ('active', 'Active', Icons.check_circle_outline),
+                      ('transferred', 'Transferred', Icons.swap_horiz),
+                      ('vacation', 'Vacation', Icons.beach_access_outlined),
+                      ('resigned', 'Resigned', Icons.person_off_outlined),
+                    ].map((filter) {
+                      final selected = _adminEmployeeStatusFilter == filter.$1;
+                      return FilterChip(
+                        visualDensity: VisualDensity.compact,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9)),
+                        avatar: Icon(filter.$3,
+                            size: 16,
+                            color: selected
+                                ? Colors.white
+                                : const Color(0xFF526078)),
+                        label: Text(
+                          '${filter.$2} (${statusCounts[filter.$1] ?? 0})',
+                        ),
+                        selected: selected,
+                        showCheckmark: false,
+                        selectedColor: const Color(0xFF14345F),
+                        backgroundColor: const Color(0xFFFAFCFF),
+                        side: BorderSide(
+                          color: selected
+                              ? const Color(0xFF17233A)
+                              : const Color(0xFFD5DAE3),
+                        ),
+                        labelStyle: TextStyle(
+                          color:
+                              selected ? Colors.white : const Color(0xFF39445A),
+                          fontWeight: FontWeight.w700,
+                        ),
+                        onSelected: (_) => setState(
+                          () {
+                            _adminEmployeeStatusFilter = filter.$1;
+                            _adminEmployeePage = 0;
+                          },
+                        ),
+                      );
+                    }).toList(),
+                  );
+                  final title = Row(children: [
+                    Container(
+                        padding: const EdgeInsets.all(9),
+                        decoration: BoxDecoration(
+                            color: const Color(0xFFE8EDFF),
+                            borderRadius: BorderRadius.circular(10)),
+                        child: const Icon(Icons.groups_rounded,
+                            color: Color(0xFF5266A5), size: 22)),
+                    const SizedBox(width: 12),
+                    const Flexible(
+                        child: Text('Employees',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 25,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF172D50)))),
+                  ]);
+                  final addButton =
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(
+                        tooltip: 'Refresh employees',
+                        icon: const Icon(Icons.refresh, size: 19),
+                        onPressed: () => setState(() {
+                              _employeeRowsAt = null;
+                              _employeeSalaryCacheTime.clear();
+                              _adminEmployeesFuture = null;
+                            })),
+                    const SizedBox(width: 6),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF073AA3),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8))),
+                      onPressed: _showAddEmployee,
+                      icon: const Icon(Icons.person_add),
+                      label: const Text('Add Employee'),
+                    ),
+                  ]);
+                  if (constraints.maxWidth < 980) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [Expanded(child: title), addButton]),
+                        const SizedBox(height: 12),
+                        statusFilters,
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: title),
+                      Expanded(flex: 3, child: Center(child: statusFilters)),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: addButton,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Add, edit, delete and manage employee records.',
+                style: TextStyle(
+                  color: Colors.black54,
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _adminEmployeeSearchController,
+                onChanged: (value) => setState(() {
+                  _adminEmployeeSearch = value;
+                  _adminEmployeePage = 0;
+                }),
+                decoration: InputDecoration(
+                  hintText: 'Search employee, department or branch',
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.white,
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFFDEE6F3))),
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _adminEmployeeSearch.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear search',
+                          onPressed: () {
+                            _adminEmployeeSearchController.clear();
+                            setState(() => _adminEmployeeSearch = '');
+                          },
+                          icon: const Icon(Icons.close),
+                        ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _responsiveBranchButtonRow(
+                buttons: [
+                  _employeeBranchFilterButton(
+                    directoryStyle: true,
+                    label: 'All branches',
+                    selected: _adminEmployeeBranchFilter == null,
+                    onTap: () => setState(() {
+                      _adminEmployeeBranchFilter = null;
+                      _adminEmployeePage = 0;
+                    }),
+                  ),
+                  for (final branch in branchNames)
+                    _employeeBranchFilterButton(
+                      directoryStyle: true,
+                      label: branch,
+                      selected: _adminEmployeeBranchFilter == branch,
+                      onTap: () => setState(
+                        () {
+                          _adminEmployeeBranchFilter = branch;
+                          _adminEmployeePage = 0;
+                        },
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(
+                    child: Text(
+                        employees.isEmpty
+                            ? 'Showing 0 of 0 employees'
+                            : 'Showing ${currentPage * _employeePageSize + 1}–${currentPage * _employeePageSize + visibleEmployees.length} of ${employees.length} employees',
+                        style: const TextStyle(
+                            fontSize: 11, color: Color(0xFF647590)))),
+                EmployeeDirectoryPagination(
+                    page: currentPage,
+                    pageCount: pageCount,
+                    compact: MediaQuery.sizeOf(context).width < 1000,
+                    onChanged: (page) =>
+                        setState(() => _adminEmployeePage = page)),
+              ]),
+              const SizedBox(height: 8),
+              _panel(
+                _adminEmployeeBranchFilter == null
+                    ? 'Employee List · ${employees.length}'
+                    : '${_adminEmployeeBranchFilter!} · ${employees.length} employees',
+                employees.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.all(30),
+                        child: Center(
+                          child: Text(
+                            'No employees match your search.',
+                          ),
+                        ),
+                      )
+                    : _adminEmployeeBranchFilter != null
+                        ? _branchEmployeeManagementGrid(visibleEmployees)
+                        : Column(
+                            children: visibleEmployees.map((employee) {
+                              final String employeeId =
+                                  employee['employee_id']?.toString() ?? '';
+
+                              final String name =
+                                  employee['name']?.toString() ?? '';
+
+                              final String department =
+                                  employee['department']?.toString() ?? '';
+
+                              final String branchId =
+                                  employee['branch_id']?.toString() ?? '';
+
+                              final String designation =
+                                  employee['designation']?.toString() ?? '';
+                              final active = _isActive(employee);
+                              final metadata = <String>[
+                                employeeId,
+                                department,
+                                branchId,
+                                if (designation.isNotEmpty &&
+                                    designation.toLowerCase() !=
+                                        department.toLowerCase())
+                                  designation,
+                              ]
+                                  .where((item) => item.trim().isNotEmpty)
+                                  .join(' · ');
+
+                              return Container(
+                                decoration: const BoxDecoration(
+                                    border: Border(
+                                        bottom: BorderSide(
+                                            color: Color(0xFFE8EDF6)))),
+                                child: ListTile(
+                                  dense: true,
+                                  visualDensity:
+                                      const VisualDensity(vertical: -2),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 4,
+                                  ),
+                                  leading: EmployeePhoto(
+                                    name: name,
+                                    photoUrl: employee['photo_url']?.toString(),
+                                    radius: 17,
+                                  ),
+                                  title: Row(
+                                    children: [
+                                      Expanded(
+                                        flex: 3,
+                                        child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                name.isEmpty
+                                                    ? 'Unnamed Employee'
+                                                    : name,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                              if (!compactEmployeeView) ...[
+                                                const SizedBox(height: 4),
+                                                Text(metadata,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                        fontSize: 10,
+                                                        color:
+                                                            Color(0xFF71809A)))
+                                              ],
+                                            ]),
+                                      ),
+                                      if (!compactEmployeeView) ...[
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          flex: 5,
+                                          child: payrollCoverage(employeeId),
+                                        ),
+                                      ],
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 7,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: switch (
+                                              _employmentStatus(employee)) {
+                                            'active' => const Color(0xFFDCF7E4),
+                                            'vacation' =>
+                                              const Color(0xFFDFF5F8),
+                                            _ => const Color(0xFFFFE5E9),
+                                          },
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          _employmentStatusLabel(employee),
+                                          style: TextStyle(
+                                            color: active
+                                                ? const Color(0xFF188653)
+                                                : const Color(0xFFBE3030),
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  subtitle: !compactEmployeeView
+                                      ? null
+                                      : Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              metadata,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Color(0xFF6F7785),
+                                                fontSize: 11.5,
+                                              ),
+                                            ),
+                                            if (compactEmployeeView) ...[
+                                              const SizedBox(height: 5),
+                                              payrollCoverage(employeeId),
+                                            ],
+                                          ],
+                                        ),
+                                  trailing: compactEmployeeView
+                                      ? PopupMenuButton<String>(
+                                          tooltip: 'Employee actions',
+                                          icon: const Icon(Icons.more_vert),
+                                          onSelected: (action) {
+                                            switch (action) {
+                                              case 'view':
+                                                _showSupabaseEmployee(employee);
+                                                break;
+                                              case 'edit':
+                                                _showSupabaseEmployeeEdit(
+                                                    employee);
+                                                break;
+                                              case 'transfer':
+                                                _showTransferEmployee(employee);
+                                                break;
+                                              case 'login':
+                                                _createOrResetApplicationLogin(
+                                                    employee);
+                                                break;
+                                              case 'delete':
+                                                _confirmSupabaseEmployeeDelete(
+                                                    employeeId, name);
+                                                break;
+                                            }
+                                          },
+                                          itemBuilder: (_) => const [
+                                            PopupMenuItem(
+                                              value: 'view',
+                                              child: ListTile(
+                                                leading: Icon(
+                                                    Icons.visibility_outlined),
+                                                title: Text('View'),
+                                              ),
+                                            ),
+                                            PopupMenuItem(
+                                              value: 'edit',
+                                              child: ListTile(
+                                                leading: Icon(Icons.edit,
+                                                    color: Colors.blue),
+                                                title: Text('Edit'),
+                                              ),
+                                            ),
+                                            PopupMenuItem(
+                                              value: 'transfer',
+                                              child: ListTile(
+                                                leading: Icon(Icons.swap_horiz,
+                                                    color: Colors.orange),
+                                                title: Text('Transfer'),
+                                              ),
+                                            ),
+                                            PopupMenuItem(
+                                              value: 'login',
+                                              child: ListTile(
+                                                leading: Icon(
+                                                    Icons
+                                                        .manage_accounts_outlined,
+                                                    color: Colors.purple),
+                                                title:
+                                                    Text('Application login'),
+                                              ),
+                                            ),
+                                            PopupMenuItem(
+                                              value: 'delete',
+                                              child: ListTile(
+                                                leading: Icon(
+                                                    Icons.delete_outline,
+                                                    color: Colors.red),
+                                                title: Text('Delete'),
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              tooltip: 'View',
+                                              icon: const Icon(
+                                                Icons.visibility_outlined,
+                                              ),
+                                              onPressed: () {
+                                                _showSupabaseEmployee(
+                                                  employee,
+                                                );
+                                              },
+                                            ),
+                                            IconButton(
+                                              tooltip: 'Edit',
+                                              icon: const Icon(
+                                                Icons.edit_outlined,
+                                                color: Color(0xFF334568),
+                                              ),
+                                              onPressed: () {
+                                                _showSupabaseEmployeeEdit(
+                                                    employee);
+                                              },
+                                            ),
+                                            PopupMenuButton<String>(
+                                              tooltip: 'More actions',
+                                              icon:
+                                                  const Icon(Icons.more_horiz),
+                                              onSelected: (action) {
+                                                switch (action) {
+                                                  case 'transfer':
+                                                    _showTransferEmployee(
+                                                        employee);
+                                                    break;
+                                                  case 'login':
+                                                    _createOrResetApplicationLogin(
+                                                        employee);
+                                                    break;
+                                                  case 'delete':
+                                                    _confirmSupabaseEmployeeDelete(
+                                                        employeeId, name);
+                                                    break;
+                                                }
+                                              },
+                                              itemBuilder: (_) => const [
+                                                PopupMenuItem(
+                                                  value: 'transfer',
+                                                  child: ListTile(
+                                                    leading:
+                                                        Icon(Icons.swap_horiz),
+                                                    title: Text('Transfer'),
+                                                  ),
+                                                ),
+                                                PopupMenuItem(
+                                                  value: 'login',
+                                                  child: ListTile(
+                                                    leading: Icon(Icons
+                                                        .manage_accounts_outlined),
+                                                    title: Text(
+                                                        'Application login'),
+                                                  ),
+                                                ),
+                                                PopupMenuDivider(),
+                                                PopupMenuItem(
+                                                  value: 'delete',
+                                                  child: ListTile(
+                                                    leading: Icon(
+                                                        Icons.delete_outline,
+                                                        color: Colors.red),
+                                                    title: Text('Delete',
+                                                        style: TextStyle(
+                                                            color: Colors.red)),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                  onTap: () {
+                                    _showSupabaseEmployee(
+                                      employee,
+                                    );
+                                  },
+                                ),
+                              );
+                            }).toList(),
+                          ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _branchEmployeeManagementGrid(
+    List<Map<String, dynamic>> employees,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 1050
+            ? 4
+            : constraints.maxWidth >= 720
+                ? 3
+                : constraints.maxWidth >= 440
+                    ? 2
+                    : 1;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: employees.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            mainAxisExtent: 132,
+          ),
+          itemBuilder: (context, index) {
+            final employee = employees[index];
+            final employeeId = employee['employee_id']?.toString() ?? '';
+            final name = employee['name']?.toString() ?? 'Employee';
+            final branch = employee['branch_id']?.toString() ?? '';
+            return InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => _showSupabaseEmployee(employee),
+              child: Container(
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Colors.white, Color(0xFFF4F8FF)],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFD7DFEC)),
+                ),
+                child: Column(children: [
+                  Expanded(
+                    child: Row(children: [
+                      EmployeePhoto(
+                        name: name,
+                        photoUrl: employee['photo_url']?.toString(),
+                        radius: 25,
+                        borderColor: _midnight,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w800)),
+                            Text('$employeeId • $branch',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    color: Colors.black54, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                    ]),
+                  ),
+                  const Divider(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      _employeeGridAction(
+                        'View',
+                        Icons.visibility_rounded,
+                        const Color(0xFF475569),
+                        () => _showSupabaseEmployee(employee),
+                      ),
+                      _employeeGridAction(
+                        'Edit',
+                        Icons.edit_rounded,
+                        const Color(0xFF168CE5),
+                        () => _showSupabaseEmployeeEdit(employee),
+                      ),
+                      _employeeGridAction(
+                        'Transfer',
+                        Icons.swap_horiz_rounded,
+                        const Color(0xFFF08A00),
+                        () => _showTransferEmployee(employee),
+                      ),
+                      _employeeGridAction(
+                        'Application login',
+                        Icons.manage_accounts_rounded,
+                        const Color(0xFF9C27B0),
+                        () => _createOrResetApplicationLogin(employee),
+                      ),
+                      _employeeGridAction(
+                        'Delete',
+                        Icons.delete_outline_rounded,
+                        const Color(0xFFEF3038),
+                        () => _confirmSupabaseEmployeeDelete(employeeId, name),
+                      ),
+                    ],
+                  ),
+                ]),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _employeeBranchFilterButton({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+    bool directoryStyle = false,
+  }) {
+    final allBranches = label.trim().toLowerCase() == 'all branches';
+    return SizedBox(
+      width: 140,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(26),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: directoryStyle ? 34 : 44,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: directoryStyle
+                  ? (selected
+                      ? const Color(0xFF16365E)
+                      : const Color(0xFFFAFCFF))
+                  : (selected ? _midnight : const Color(0xFFF8F7F3)),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(
+                color: selected ? _midnight : const Color(0xFFD9DDE5),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (allBranches)
+                  Icon(
+                    Icons.grid_view_rounded,
+                    color: selected
+                        ? (directoryStyle
+                            ? Colors.white
+                            : const Color(0xFFD6B24F))
+                        : const Color(0xFF252418),
+                    size: 18,
+                  ),
+                if (allBranches) const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    allBranches ? 'All branches' : label.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.visible,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: selected ? Colors.white : const Color(0xFF252418),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: allBranches ? 0 : .25,
+                      height: 1,
+                      shadows: selected
+                          ? const [
+                              Shadow(
+                                color: Color(0x55000000),
+                                blurRadius: 2,
+                                offset: Offset(0, 1),
+                              ),
+                            ]
+                          : null,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _responsiveBranchButtonRow({
+    required List<Widget> buttons,
+    double spacing = 5,
+  }) {
+    if (buttons.isEmpty) return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final usableWidth =
+            constraints.maxWidth - spacing * (buttons.length - 1);
+        final widthPerButton = usableWidth / buttons.length;
+        if (widthPerButton >= 94) {
+          return Row(
+            children: [
+              for (var index = 0; index < buttons.length; index++) ...[
+                Expanded(child: buttons[index]),
+                if (index != buttons.length - 1) SizedBox(width: spacing),
+              ],
+            ],
+          );
+        }
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (var index = 0; index < buttons.length; index++) ...[
+                buttons[index],
+                if (index != buttons.length - 1) SizedBox(width: spacing),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _employeeGridAction(
+    String tooltip,
+    IconData icon,
+    Color color,
+    VoidCallback onPressed,
+  ) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 29,
+          height: 29,
+          margin: const EdgeInsets.only(left: 5),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: .10),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color, size: 17),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _createOrResetApplicationLogin(
+    Map<String, dynamic> employee,
+  ) async {
+    final employeeId = employee['employee_id']?.toString().trim() ?? '';
+    final email = employee['email']?.toString().trim() ?? '';
+    if (employeeId.isEmpty || email.isEmpty || !email.contains('@')) {
+      _message('A valid Employee ID and email address are required.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Create Application Login'),
+        content: Text(
+          'User ID: $email\nDefault password: 112233\n\n'
+          'If an account already exists, its password will be reset. The employee '
+          'must create a new password before the dashboard can open.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.manage_accounts_outlined),
+            label: const Text('Create / Reset'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final result = await service.createOrResetEmployeeLogin(
+      employeeId,
+      email: email,
+      isActive: employee['is_active'] != false,
+    );
+    if (!mounted) return;
+    _message(result);
+  }
+
+  // ===========================================================================
+  // ADD EMPLOYEE
+  // ===========================================================================
+
+  void _showAddEmployee() {
+    final employeeId = TextEditingController();
+    final name = TextEditingController();
+    final designation = TextEditingController();
+    final department = TextEditingController();
+    final email = TextEditingController();
+    final ic = TextEditingController();
+    final bank = TextEditingController();
+    final account = TextEditingController();
+    final epfNo = TextEditingController();
+    final socsoNo = TextEditingController();
+    final phone = TextEditingController();
+    final address = TextEditingController();
+    final basicSalary = TextEditingController();
+    final fwSalary = TextEditingController(text: '0');
+    final elaunKedatangan = TextEditingController(text: '0');
+    final elaunPerkhidmatan = TextEditingController(text: '0');
+    final elaunKerajinan = TextEditingController(text: '0');
+    final elaunMakanan = TextEditingController(text: '0');
+    final zakat = TextEditingController(text: '0');
+
+    String branchId =
+        service.branches.isNotEmpty ? service.branches.first.id : '';
+    String payrollBranchId = '';
+
+    DateTime joiningDate = DateTime.now();
+    DateTime? birthday;
+    String employmentStatus = 'active';
+    bool managementStaff = false;
+    bool tempStaff = false;
+    bool supportStaff = false;
+    bool otherStaff = false;
+    String epfCategory = 'normal1';
+    bool eisApplicable = true;
+    bool epfEnabled = true;
+    bool eisEnabled = true;
+    bool socsoEnabled = true;
+    String socsoCategory = 'type1';
+    bool saving = false;
+
+    Widget sectionHeading(IconData icon, String title, String subtitle) =>
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 20, color: const Color(0xFF173A78)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w700)),
+                    Text(subtitle,
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF6F7785))),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+    Widget settingSwitch({
+      required IconData icon,
+      required Color color,
+      required String label,
+      required String subtitle,
+      required bool value,
+      required ValueChanged<bool>? onChanged,
+    }) =>
+        Container(
+          constraints: const BoxConstraints(minHeight: 72),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .55),
+            border: Border.all(color: const Color(0xFFCED3DD)),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: SwitchListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+            secondary: Icon(icon, color: color, size: 20),
+            title: Text(label),
+            subtitle: Text(subtitle, maxLines: 2),
+            value: value,
+            onChanged: onChanged,
+          ),
+        );
+
+    String salaryTransferMethod = '';
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Add Employee'),
+              content: SizedBox(
+                width: (MediaQuery.sizeOf(dialogContext).width - 80)
+                    .clamp(320.0, 1500.0)
+                    .toDouble(),
+                height: (MediaQuery.sizeOf(dialogContext).height * .78)
+                    .clamp(360.0, 900.0)
+                    .toDouble(),
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      sectionHeading(
+                        Icons.badge_outlined,
+                        'Personal Information',
+                        'Identity and contact details for the employee.',
+                      ),
+                      _responsiveFormGrid(children: [
+                        _dialogField(employeeId, 'Employee ID *'),
+                        _dialogField(name, 'Full Name *'),
+                        _dialogField(designation, 'Designation'),
+                        _dialogField(department, 'Department *'),
+                        _dialogField(email, 'Email'),
+                        _dialogField(ic, 'New IC No'),
+                        _dialogField(bank, 'Bank Code'),
+                        _dialogField(account, 'Bank Account'),
+                        SalaryTransferField(
+                          account: account,
+                          method: salaryTransferMethod,
+                          onChanged: (value) => setDialogState(
+                              () => salaryTransferMethod = value),
+                        ),
+                        _dialogField(epfNo, 'EPF No.'),
+                        _dialogField(socsoNo, 'SOCSO No.'),
+                        _dialogField(phone, 'Phone'),
+                        _dialogField(address, 'Address'),
+                      ]),
+                      const Divider(height: 28),
+                      sectionHeading(
+                        Icons.payments_outlined,
+                        'Salary & Statutory Settings',
+                        'Default payroll amounts and contribution settings.',
+                      ),
+                      _responsiveFormGrid(children: [
+                        _dialogField(basicSalary, 'Basic Salary (RM) *',
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true)),
+                        _dialogField(fwSalary, 'FW Salary (RM)',
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true)),
+                        _dialogField(elaunKedatangan, 'Elaun Kedatangan (RM)',
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true)),
+                        _dialogField(
+                            elaunPerkhidmatan, 'Elaun Perkhidmatan (RM)',
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true)),
+                        _dialogField(elaunKerajinan, 'Elaun Kerajinan (RM)',
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true)),
+                        _dialogField(elaunMakanan, 'Elaun Makanan (RM)',
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true)),
+                        _dialogField(zakat, 'Zakat (RM)',
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true)),
+                        DropdownButtonFormField<String>(
+                          initialValue: epfCategory,
+                          decoration: const InputDecoration(
+                            labelText: 'EPF Category',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'normal1',
+                              child: Text('Normal 1 (statutory schedule)'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'normal',
+                              child: Text('Normal (2% employee + employer)'),
+                            ),
+                          ],
+                          onChanged: saving
+                              ? null
+                              : (value) => setDialogState(
+                                  () => epfCategory = value ?? 'normal1'),
+                        ),
+                        DropdownButtonFormField<String>(
+                          initialValue: socsoCategory,
+                          decoration: const InputDecoration(
+                            labelText: 'SOCSO Category',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'type1',
+                              child: Text('Type 1 - Employer + Employee'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'type2',
+                              child: Text('Type 2 - Employer Only'),
+                            ),
+                          ],
+                          onChanged: saving || !socsoEnabled
+                              ? null
+                              : (value) => setDialogState(
+                                  () => socsoCategory = value ?? 'type1'),
+                        ),
+                        settingSwitch(
+                          icon: Icons.account_balance_wallet,
+                          color: const Color(0xFF3957C5),
+                          label: 'EPF Enabled',
+                          subtitle: 'Employee and employer contributions.',
+                          value: epfEnabled,
+                          onChanged: saving
+                              ? null
+                              : (value) =>
+                                  setDialogState(() => epfEnabled = value),
+                        ),
+                        settingSwitch(
+                          icon: Icons.health_and_safety,
+                          color: const Color(0xFF16A36A),
+                          label: 'SOCSO Enabled',
+                          subtitle: 'Calculate using the selected category.',
+                          value: socsoEnabled,
+                          onChanged: saving
+                              ? null
+                              : (value) =>
+                                  setDialogState(() => socsoEnabled = value),
+                        ),
+                        settingSwitch(
+                          icon: Icons.verified_user,
+                          color: const Color(0xFFFF8A34),
+                          label: 'EIS Enabled',
+                          subtitle: 'Employee and employer contributions.',
+                          value: eisEnabled,
+                          onChanged: saving
+                              ? null
+                              : (value) =>
+                                  setDialogState(() => eisEnabled = value),
+                        ),
+                      ]),
+                      const Divider(height: 28),
+                      sectionHeading(
+                        Icons.work_outline,
+                        'Employment Details',
+                        'Branch assignment, dates and initial status.',
+                      ),
+                      if (service.branches.isNotEmpty)
+                        DropdownButtonFormField<String>(
+                          initialValue: branchId,
+                          decoration: const InputDecoration(
+                            labelText: 'Branch *',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: service.branches.map(
+                            (branch) {
+                              return DropdownMenuItem<String>(
+                                value: branch.id,
+                                child: Text(
+                                  branch.name,
+                                ),
+                              );
+                            },
+                          ).toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+
+                            setDialogState(() {
+                              branchId = value;
+                            });
+                          },
+                        ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: payrollBranchId,
+                        decoration: const InputDecoration(
+                          labelText: 'Payroll Branch',
+                          helperText:
+                              'Used for payroll only. Leave unchanged to use the attendance branch.',
+                          helperMaxLines: 2,
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: '',
+                            child: Text('Same as attendance branch'),
+                          ),
+                          ...service.branches.map(
+                            (branch) => DropdownMenuItem<String>(
+                              value: branch.id,
+                              child: Text(branch.name),
+                            ),
+                          ),
+                        ],
+                        onChanged: saving
+                            ? null
+                            : (value) => setDialogState(
+                                  () => payrollBranchId = value ?? '',
+                                ),
+                      ),
+                      const SizedBox(height: 15),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Birthday'),
+                        subtitle: Text(birthday == null
+                            ? 'Not set'
+                            : DateFormat('dd MMM yyyy').format(birthday!)),
+                        trailing: const Icon(Icons.cake_outlined),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            firstDate: DateTime(1940),
+                            lastDate: DateTime.now(),
+                            initialDate: birthday ?? DateTime(1990),
+                          );
+                          if (picked != null) {
+                            setDialogState(() => birthday = picked);
+                          }
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'Joining Date',
+                        ),
+                        subtitle: Text(
+                          DateFormat('dd MMM yyyy').format(joiningDate),
+                        ),
+                        trailing: const Icon(
+                          Icons.calendar_month,
+                        ),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                            initialDate: joiningDate,
+                          );
+
+                          if (picked != null) {
+                            setDialogState(() {
+                              joiningDate = picked;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Employment Status',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: const [
+                            (
+                              'active',
+                              'Active',
+                              Color(0xFF168653),
+                              Icons.check_circle_outline
+                            ),
+                            (
+                              'vacation',
+                              'Vacation',
+                              Color(0xFFE08A00),
+                              Icons.beach_access_outlined
+                            ),
+                            (
+                              'transferred',
+                              'Transferred',
+                              Color(0xFF3567B7),
+                              Icons.swap_horiz
+                            ),
+                            (
+                              'resigned',
+                              'Resigned',
+                              Color(0xFFC13B3B),
+                              Icons.person_off_outlined
+                            ),
+                          ].map((option) {
+                            final selected = employmentStatus == option.$1;
+                            return ChoiceChip(
+                              avatar: Icon(option.$4,
+                                  size: 18,
+                                  color: selected ? Colors.white : option.$3),
+                              label: Text(option.$2),
+                              selected: selected,
+                              selectedColor: option.$3,
+                              labelStyle: TextStyle(
+                                color: selected ? Colors.white : option.$3,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              side: BorderSide(color: option.$3),
+                              onSelected: saving
+                                  ? null
+                                  : (_) => setDialogState(
+                                      () => employmentStatus = option.$1),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      const Divider(height: 28),
+                      sectionHeading(
+                        Icons.groups_outlined,
+                        'Staff Classification',
+                        'Choose at most one special payroll classification.',
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Management Staff'),
+                        subtitle: const Text(
+                          'Hidden from branch attendance; payroll uses salary defaults only.',
+                        ),
+                        value: managementStaff,
+                        onChanged: (value) => setDialogState(() {
+                          managementStaff = value;
+                          if (value) {
+                            tempStaff = false;
+                            supportStaff = false;
+                            otherStaff = false;
+                          }
+                        }),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Temporary Staff'),
+                        subtitle: const Text(
+                          'Payroll only; hidden from branch attendance.',
+                        ),
+                        value: tempStaff,
+                        onChanged: (value) => setDialogState(() {
+                          tempStaff = value;
+                          if (value) {
+                            managementStaff = false;
+                            supportStaff = false;
+                            otherStaff = false;
+                          }
+                        }),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Support Staff'),
+                        subtitle: const Text(
+                          'Payroll only; hidden from branch attendance.',
+                        ),
+                        value: supportStaff,
+                        onChanged: (value) => setDialogState(() {
+                          supportStaff = value;
+                          if (value) {
+                            managementStaff = false;
+                            tempStaff = false;
+                            otherStaff = false;
+                          }
+                        }),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Intern/Practical'),
+                        subtitle: const Text(
+                          'Regular attendance and payroll; included in HRDF when eligible.',
+                        ),
+                        value: otherStaff,
+                        onChanged: (value) => setDialogState(() {
+                          otherStaff = value;
+                          if (value) {
+                            managementStaff = false;
+                            tempStaff = false;
+                            supportStaff = false;
+                          }
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: saving
+                      ? null
+                      : () {
+                          Navigator.pop(dialogContext);
+                        },
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final id = employeeId.text.trim();
+                          final employeeName = name.text.trim();
+                          final employeeDepartment = department.text.trim();
+
+                          if (id.isEmpty ||
+                              employeeName.isEmpty ||
+                              employeeDepartment.isEmpty ||
+                              branchId.trim().isEmpty) {
+                            _message(
+                              'Employee ID, full name, department and branch are required.',
+                            );
+                            return;
+                          }
+
+                          if (service.findEmployee(id) != null) {
+                            _message(
+                              'Employee ID already exists.',
+                            );
+                            return;
+                          }
+
+                          double? salaryValue(
+                              TextEditingController controller) {
+                            return double.tryParse(
+                              controller.text.trim().replaceAll(',', ''),
+                            );
+                          }
+
+                          final parsedBasicSalary = salaryValue(basicSalary);
+                          final parsedFwSalary = salaryValue(fwSalary);
+                          final parsedElaunKedatangan =
+                              salaryValue(elaunKedatangan);
+                          final parsedElaunPerkhidmatan =
+                              salaryValue(elaunPerkhidmatan);
+                          final parsedElaunKerajinan =
+                              salaryValue(elaunKerajinan);
+                          final parsedElaunMakanan = salaryValue(elaunMakanan);
+                          final parsedZakat = salaryValue(zakat);
+                          final salaryValues = [
+                            parsedBasicSalary,
+                            parsedFwSalary,
+                            parsedElaunKedatangan,
+                            parsedElaunPerkhidmatan,
+                            parsedElaunKerajinan,
+                            parsedElaunMakanan,
+                            parsedZakat,
+                          ];
+
+                          if (salaryValues.any(
+                            (value) => value == null || value < 0,
+                          )) {
+                            _message(
+                              'Enter valid non-negative amounts for all salary fields.',
+                            );
+                            return;
+                          }
+
+                          setDialogState(() => saving = true);
+                          final active = employmentStatus == 'active' ||
+                              employmentStatus == 'vacation';
+                          final result = await service.addEmployee(
+                            Employee(
+                              employeeId: id,
+                              name: employeeName,
+                              designation: designation.text.trim(),
+                              department: department.text.trim(),
+                              email: email.text.trim(),
+                              newIcNo: ic.text.trim(),
+                              bankCode: bank.text.trim(),
+                              bankAccount: account.text.trim(),
+                              salaryTransferMethod: SalaryTransfer.resolve(
+                                  salaryTransferMethod, account.text),
+                              epfNo: epfNo.text.trim(),
+                              socsoNo: socsoNo.text.trim(),
+                              phone: phone.text.trim(),
+                              address: address.text.trim(),
+                              joiningDate: joiningDate,
+                              birthday: birthday,
+                              isActive: active,
+                              isManagementStaff: managementStaff,
+                              isTempStaff: tempStaff,
+                              isSupportStaff: supportStaff,
+                              isOtherStaff: otherStaff,
+                            ),
+                            branchId: branchId,
+                            employmentStatus: employmentStatus,
+                            payrollBranchId: payrollBranchId.isEmpty
+                                ? null
+                                : payrollBranchId,
+                            salaryDefaults: {
+                              'basic_salary': parsedBasicSalary!,
+                              'fw_salary': parsedFwSalary!,
+                              'elaun_kedatangan': parsedElaunKedatangan!,
+                              'elaun_perkhidmatan': parsedElaunPerkhidmatan!,
+                              'elaun_kerajinan': parsedElaunKerajinan!,
+                              'elaun_makanan': parsedElaunMakanan!,
+                              'zakat': parsedZakat!,
+                              'epf_category': epfCategory,
+                              'eis_applicable': eisApplicable,
+                              'epf_enabled': epfEnabled,
+                              'eis_enabled': eisEnabled,
+                              'socso_enabled': socsoEnabled,
+                              'socso_category': socsoCategory,
+                              'address': address.text.trim(),
+                            },
+                          );
+
+                          if (!dialogContext.mounted) return;
+                          if (result.toLowerCase().startsWith('failed')) {
+                            setDialogState(() => saving = false);
+                            _message(result);
+                            return;
+                          }
+                          Navigator.pop(dialogContext);
+                          if (!mounted) return;
+                          setState(() {
+                            _adminEmployeesFuture = null;
+                            _employeeRowsAt = null;
+                          });
+                          _message(result);
+                        },
+                  child: Text(saving ? 'Adding...' : 'Add Employee'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ===========================================================================
+  // EDIT EMPLOYEE
+  // ===========================================================================
+
+  void _showEditEmployee(Employee employee) {
+    final name = TextEditingController(
+      text: employee.name,
+    );
+    final designation = TextEditingController(
+      text: employee.designation,
+    );
+    final department = TextEditingController(
+      text: employee.department,
+    );
+    final email = TextEditingController(
+      text: employee.email,
+    );
+    final ic = TextEditingController(
+      text: employee.newIcNo,
+    );
+    final bank = TextEditingController(
+      text: employee.bankCode,
+    );
+    final account = TextEditingController(
+      text: employee.bankAccount,
+    );
+    final phone = TextEditingController(
+      text: employee.phone,
+    );
+    final address = TextEditingController(
+      text: employee.address,
+    );
+
+    String branchId = employee.branchId;
+
+    DateTime joiningDate = employee.joiningDate ?? DateTime.now();
+    DateTime? birthday = employee.birthday;
+
+    bool active = employee.isActive;
+    bool managementStaff = employee.isManagementStaff;
+    bool tempStaff = employee.isTempStaff;
+    bool supportStaff = employee.isSupportStaff;
+    bool otherStaff = employee.isOtherStaff;
+
+    String salaryTransferMethod = employee.salaryTransferMethod;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(
+                'Edit ${employee.employeeId}',
+              ),
+              content: SizedBox(
+                width: 550,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      TextField(
+                        enabled: false,
+                        controller: TextEditingController(
+                          text: employee.employeeId,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Employee ID',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _dialogField(
+                        name,
+                        'Full Name',
+                      ),
+                      _dialogField(
+                        designation,
+                        'Designation',
+                      ),
+                      _dialogField(
+                        department,
+                        'Department',
+                      ),
+                      _dialogField(
+                        email,
+                        'Email',
+                      ),
+                      _dialogField(
+                        ic,
+                        'New IC No',
+                      ),
+                      _dialogField(
+                        bank,
+                        'Bank Code',
+                      ),
+                      _dialogField(
+                        account,
+                        'Bank Account',
+                      ),
+                      SalaryTransferField(
+                        account: account,
+                        method: salaryTransferMethod,
+                        onChanged: (value) =>
+                            setDialogState(() => salaryTransferMethod = value),
+                      ),
+                      _dialogField(
+                        phone,
+                        'Phone',
+                      ),
+                      _dialogField(
+                        address,
+                        'Address',
+                      ),
+                      if (service.branches.isNotEmpty)
+                        DropdownButtonFormField<String>(
+                          initialValue: service.branches.any(
+                            (branch) => branch.id == branchId,
+                          )
+                              ? branchId
+                              : service.branches.first.id,
+                          decoration: const InputDecoration(
+                            labelText: 'Branch',
+                          ),
+                          items: service.branches.map(
+                            (branch) {
+                              return DropdownMenuItem<String>(
+                                value: branch.id,
+                                child: Text(
+                                  branch.name,
+                                ),
+                              );
+                            },
+                          ).toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+
+                            setDialogState(() {
+                              branchId = value;
+                            });
+                          },
+                        ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Birthday'),
+                        subtitle: Text(birthday == null
+                            ? 'Not set'
+                            : DateFormat('dd MMM yyyy').format(birthday!)),
+                        trailing: const Icon(Icons.cake_outlined),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            firstDate: DateTime(1940),
+                            lastDate: DateTime.now(),
+                            initialDate: birthday ?? DateTime(1990),
+                          );
+                          if (picked != null) {
+                            setDialogState(() => birthday = picked);
+                          }
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'Joining Date',
+                        ),
+                        subtitle: Text(
+                          DateFormat('dd MMM yyyy').format(joiningDate),
+                        ),
+                        trailing: const Icon(
+                          Icons.calendar_month,
+                        ),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                            initialDate: joiningDate,
+                          );
+
+                          if (picked != null) {
+                            setDialogState(() {
+                              joiningDate = picked;
+                            });
+                          }
+                        },
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Active'),
+                        value: active,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            active = value;
+                          });
+                        },
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Management Staff'),
+                        subtitle: const Text(
+                          'Hidden from branch attendance; salary-default payroll only.',
+                        ),
+                        value: managementStaff,
+                        onChanged: (value) => setDialogState(() {
+                          managementStaff = value;
+                          if (value) {
+                            tempStaff = false;
+                            supportStaff = false;
+                            otherStaff = false;
+                          }
+                        }),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Temporary Staff'),
+                        subtitle: const Text(
+                          'Payroll only; hidden from branch attendance.',
+                        ),
+                        value: tempStaff,
+                        onChanged: (value) => setDialogState(() {
+                          tempStaff = value;
+                          if (value) {
+                            managementStaff = false;
+                            supportStaff = false;
+                            otherStaff = false;
+                          }
+                        }),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Support Staff'),
+                        subtitle: const Text(
+                          'Payroll only; hidden from branch attendance.',
+                        ),
+                        value: supportStaff,
+                        onChanged: (value) => setDialogState(() {
+                          supportStaff = value;
+                          if (value) {
+                            managementStaff = false;
+                            tempStaff = false;
+                            otherStaff = false;
+                          }
+                        }),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Intern/Practical'),
+                        subtitle: const Text(
+                          'Regular attendance and payroll; included in HRDF when eligible.',
+                        ),
+                        value: otherStaff,
+                        onChanged: (value) => setDialogState(() {
+                          otherStaff = value;
+                          if (value) {
+                            managementStaff = false;
+                            tempStaff = false;
+                            supportStaff = false;
+                          }
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final updated = employee.copyWith(
+                      name: name.text.trim(),
+                      designation: designation.text.trim(),
+                      department: department.text.trim(),
+                      email: email.text.trim(),
+                      newIcNo: ic.text.trim(),
+                      bankCode: bank.text.trim(),
+                      bankAccount: account.text.trim(),
+                      salaryTransferMethod: SalaryTransfer.resolve(
+                          salaryTransferMethod, account.text),
+                      phone: phone.text.trim(),
+                      address: address.text.trim(),
+                      joiningDate: joiningDate,
+                      birthday: birthday,
+                      isActive: active,
+                      isManagementStaff: managementStaff,
+                      isTempStaff: tempStaff,
+                      isSupportStaff: supportStaff,
+                      isOtherStaff: otherStaff,
+                      branchId: branchId,
+                    );
+
+                    service.updateEmployee(updated);
+
+                    Navigator.pop(dialogContext);
+
+                    _message(
+                      'Employee updated successfully.',
+                    );
+                  },
+                  child: const Text(
+                    'Update Employee',
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ===========================================================================
+  // DELETE EMPLOYEE
+  // ===========================================================================
+
+  void _confirmDelete(Employee employee) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text(
+            'Delete Employee?',
+          ),
+          content: Text(
+            'Are you sure you want to delete '
+            '${employee.name} (${employee.employeeId})?\n\n'
+            'This will also remove the employee login, '
+            'attendance records and payroll records from '
+            'the current application data.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+              onPressed: () {
+                service.deleteEmployee(
+                  employee.employeeId,
+                );
+
+                Navigator.pop(dialogContext);
+
+                _message(
+                  'Employee deleted successfully.',
+                );
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _confirmSupabaseEmployeeDelete(
+    String employeeId,
+    String employeeName,
+  ) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text(
+            'Delete Employee',
+          ),
+          content: Text(
+            'Are you sure you want to delete '
+            '"$employeeName"?\n\n'
+            'This will also delete the employee payroll '
+            'records because of the database relationship.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+
+                try {
+                  await SupabaseService.deleteEmployee(
+                    employeeId,
+                  );
+
+                  if (!mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Employee deleted successfully.',
+                      ),
+                    ),
+                  );
+
+                  setState(() {});
+                } catch (e) {
+                  if (!mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Delete failed: $e',
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: const Text(
+                'Delete',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ===========================================================================
+  // VIEW EMPLOYEE
+  // ===========================================================================
+
+  void _showEmployee(Employee employee) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(employee.name),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _detail(
+                  'Employee ID',
+                  employee.employeeId,
+                ),
+                _detail(
+                  'Branch',
+                  employee.branchId,
+                ),
+                _detail(
+                  'Designation',
+                  employee.designation,
+                ),
+                _detail(
+                  'Department',
+                  employee.department,
+                ),
+                _detail(
+                  'Email',
+                  employee.email,
+                ),
+                _detail(
+                  'IC',
+                  employee.newIcNo,
+                ),
+                _detail(
+                  'Phone',
+                  employee.phone,
+                ),
+                _detail(
+                  'Address',
+                  employee.address,
+                ),
+                _detail(
+                  'Bank',
+                  employee.bankCode,
+                ),
+                _detail(
+                  'Account',
+                  employee.bankAccount,
+                ),
+                _detail(
+                  'Joining Date',
+                  employee.joiningDate == null
+                      ? '-'
+                      : DateFormat(
+                          'dd MMM yyyy',
+                        ).format(
+                          employee.joiningDate!,
+                        ),
+                ),
+                _detail(
+                  'Status',
+                  employee.isActive ? 'Active' : 'Inactive',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Close'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                _showEditEmployee(employee);
+              },
+              icon: const Icon(Icons.edit),
+              label: const Text('Edit'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showSupabaseEmployee(
+    Map<String, dynamic> employee,
+  ) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        var changingPhoto = false;
+        return StatefulBuilder(builder: (context, setDialogState) {
+          final name = employee['name']?.toString() ?? '';
+          final photoUrl = employee['photo_url']?.toString() ?? '';
+          final employeeId = employee['employee_id']?.toString() ?? '';
+          return AlertDialog(
+            backgroundColor: const Color(0xFFF3F7FF),
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            titlePadding: EdgeInsets.zero,
+            title: Container(
+              padding: const EdgeInsets.fromLTRB(24, 18, 18, 18),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF062D69), Color(0xFF174CA4)],
+                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.badge_outlined,
+                        color: Color(0xFF062D69), size: 30),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Payroll Company',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          name.isEmpty
+                              ? 'EMPLOYEE IDENTITY'
+                              : name.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: employee['is_active'] == true
+                          ? const Color(0xFF2EAF6D)
+                          : const Color(0xFFE45A5A),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      employee['is_active'] == true ? 'ACTIVE' : 'INACTIVE',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            content: SizedBox(
+              width: 650,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Column(
+                        children: [
+                          EmployeePhoto(
+                            name: name,
+                            photoUrl: photoUrl,
+                            radius: 66,
+                            borderColor: _midnight,
+                          ),
+                          const SizedBox(height: 9),
+                          Text(
+                            employeeId.isEmpty ? '-' : employeeId,
+                            style: const TextStyle(
+                              color: Color(0xFF062D69),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: changingPhoto
+                                    ? null
+                                    : () async {
+                                        changingPhoto = true;
+                                        setDialogState(() {});
+                                        try {
+                                          final uploaded =
+                                              await _uploadEmployeePhoto(
+                                                  employeeId);
+                                          if (uploaded != null) {
+                                            employee['photo_url'] = uploaded;
+                                          }
+                                        } finally {
+                                          changingPhoto = false;
+                                          if (dialogContext.mounted) {
+                                            setDialogState(() {});
+                                          }
+                                        }
+                                      },
+                                icon: Icon(photoUrl.isEmpty
+                                    ? Icons.add_a_photo_outlined
+                                    : Icons.photo_camera_outlined),
+                                label: Text(photoUrl.isEmpty
+                                    ? 'Add Photo'
+                                    : 'Change Photo'),
+                              ),
+                              if (photoUrl.isNotEmpty)
+                                TextButton.icon(
+                                  onPressed: changingPhoto
+                                      ? null
+                                      : () async {
+                                          changingPhoto = true;
+                                          setDialogState(() {});
+                                          try {
+                                            await SupabaseService
+                                                .removeEmployeePhoto(
+                                                    employeeId);
+                                            employee['photo_url'] = null;
+                                            _refreshEmployeePhotoData();
+                                          } catch (error) {
+                                            if (mounted) {
+                                              _message(
+                                                  'Unable to remove photo: $error');
+                                            }
+                                          } finally {
+                                            changingPhoto = false;
+                                            if (dialogContext.mounted) {
+                                              setDialogState(() {});
+                                            }
+                                          }
+                                        },
+                                  icon: const Icon(Icons.delete_outline),
+                                  label: const Text('Remove'),
+                                ),
+                            ],
+                          ),
+                          if (changingPhoto) ...[
+                            const SizedBox(height: 8),
+                            const LinearProgressIndicator(),
+                          ],
+                          const Divider(height: 30),
+                        ],
+                      ),
+                    ),
+                    EmployeeProfileDetails(
+                      employee: employee,
+                      showSummary: false,
+                      onEdit: () {
+                        Navigator.pop(dialogContext);
+                        _showSupabaseEmployeeEdit(employee);
+                      },
+                    ),
+                    _employeeDetail(
+                      'Employee ID',
+                      employee['employee_id'],
+                    ),
+                    _employeeDetail(
+                      'Name',
+                      employee['name'],
+                    ),
+                    _employeeDetail(
+                      'Designation',
+                      employee['designation'],
+                    ),
+                    _employeeDetail(
+                      'Department',
+                      employee['department'],
+                    ),
+                    _employeeDetail(
+                      'Email',
+                      employee['email'],
+                    ),
+                    _employeeDetail(
+                      'IC No.',
+                      employee['new_ic_no'],
+                    ),
+                    _employeeDetail(
+                      'Bank Code',
+                      employee['bank_code'],
+                    ),
+                    _employeeDetail(
+                      'Bank Account',
+                      employee['bank_account'],
+                    ),
+                    _employeeDetail(
+                      'EPF No.',
+                      employee['epf_no'],
+                    ),
+                    _employeeDetail(
+                      'SOCSO No.',
+                      employee['socso_no'],
+                    ),
+                    _employeeDetail(
+                      'Phone',
+                      employee['phone'],
+                    ),
+                    _employeeDetail(
+                      'Address',
+                      employee['address'],
+                    ),
+                    _employeeDetail(
+                      'Joining Date',
+                      employee['joining_date'],
+                    ),
+                    _employeeDetail(
+                      'Branch',
+                      employee['branch_id'],
+                    ),
+                    _employeeDetail(
+                      'Payroll Branch',
+                      _normalizeBranchValue(employee['payroll_branch_id'])
+                              .isEmpty
+                          ? 'Same as attendance branch'
+                          : employee['payroll_branch_id'],
+                    ),
+                    _employeeDetail(
+                      'Employee Category',
+                      employee['is_management_staff'] == true
+                          ? 'Management Staff'
+                          : employee['is_temp_staff'] == true
+                              ? 'Temporary Staff'
+                              : employee['is_support_staff'] == true
+                                  ? 'Support Staff'
+                                  : employee['is_other_staff'] == true
+                                      ? 'Intern/Practical'
+                                      : 'Regular Staff',
+                    ),
+                    _employeeDetail(
+                      'Active',
+                      employee['is_active'] == true ? 'Yes' : 'No',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Close'),
+              ),
+            ],
+            actionsPadding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+          );
+        });
+      },
+    );
+  }
+
+  Future<String?> _uploadEmployeePhoto(String employeeId) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return null;
+      final file = result.files.single;
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('The selected photo could not be read.');
+      }
+      if (bytes.length > 5 * 1024 * 1024) {
+        throw Exception('Photo must be 5 MB or smaller.');
+      }
+      // Employee photos are displayed as small avatars throughout the app.
+      // Decode, resize and encode them once before upload so every subsequent
+      // Storage/CDN request transfers a small optimized file.
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) {
+        throw Exception('The selected file is not a valid image.');
+      }
+      final resized = decoded.width > 480 || decoded.height > 480
+          ? img.copyResize(
+              decoded,
+              width: decoded.width >= decoded.height ? 480 : null,
+              height: decoded.height > decoded.width ? 480 : null,
+              interpolation: img.Interpolation.average,
+            )
+          : decoded;
+      final optimizedBytes = Uint8List.fromList(
+        img.encodeJpg(resized, quality: 78),
+      );
+      if (optimizedBytes.length > 500 * 1024) {
+        throw Exception('Unable to optimize this photo below 500 KB.');
+      }
+      final url = await SupabaseService.uploadEmployeePhoto(
+        employeeId: employeeId,
+        bytes: optimizedBytes,
+        contentType: 'image/jpeg',
+      );
+      _refreshEmployeePhotoData();
+      if (mounted) _message('Employee photo uploaded successfully.');
+      return url;
+    } catch (error) {
+      if (mounted) _message('Unable to upload photo: $error');
+      return null;
+    }
+  }
+
+  void _refreshEmployeePhotoData() {
+    if (!mounted) return;
+    setState(() {
+      _adminEmployeesFuture = null;
+      _employeeRowsAt = null;
+    });
+    service.loadEmployeesFromSupabase();
+  }
+
+  Widget _employeeDetail(
+    String label,
+    dynamic value,
+  ) {
+    return const SizedBox.shrink();
+  }
+
+  void _showTransferEmployee(Map<String, dynamic> employee) {
+    final employeeId = employee['employee_id']?.toString().trim() ?? '';
+    final name = employee['name']?.toString().trim() ?? 'Employee';
+    final currentBranch = employee['branch_id']?.toString().trim() ?? '';
+    final destinations = service.branches
+        .where((branch) =>
+            branch.id.trim().toLowerCase() != currentBranch.toLowerCase())
+        .toList();
+    String? destination = destinations.isEmpty ? null : destinations.first.id;
+    DateTime effectiveDate = DateTime.now();
+    final reason = TextEditingController();
+    bool saving = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Transfer $name'),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    'Current branch: ${currentBranch.isEmpty ? '-' : currentBranch}'),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  initialValue: destination,
+                  decoration: const InputDecoration(
+                    labelText: 'Transfer to branch',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: destinations
+                      .map((branch) => DropdownMenuItem(
+                            value: branch.id,
+                            child: Text(branch.name),
+                          ))
+                      .toList(),
+                  onChanged: saving
+                      ? null
+                      : (value) => setDialogState(() => destination = value),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Effective date'),
+                  subtitle:
+                      Text(DateFormat('dd MMM yyyy').format(effectiveDate)),
+                  trailing: const Icon(Icons.calendar_month_outlined),
+                  onTap: saving
+                      ? null
+                      : () async {
+                          final value = await showDatePicker(
+                            context: dialogContext,
+                            initialDate: effectiveDate,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (value != null) {
+                            setDialogState(() => effectiveDate = value);
+                          }
+                        },
+                ),
+                TextField(
+                  controller: reason,
+                  enabled: !saving,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Reason (optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                FutureBuilder<List<Map<String, dynamic>>>(
+                  future: SupabaseService.getStaffTransferHistory(employeeId),
+                  builder: (context, snapshot) {
+                    final count = snapshot.data?.length ?? 0;
+                    return Text('Previous transfers: $count');
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.swap_horiz),
+              label: Text(saving ? 'Transferring...' : 'Transfer Staff'),
+              onPressed: saving || destination == null
+                  ? null
+                  : () async {
+                      setDialogState(() => saving = true);
+                      try {
+                        await SupabaseService.transferStaff(
+                          employeeId: employeeId,
+                          toBranchId: destination!,
+                          effectiveDate: effectiveDate,
+                          reason: reason.text,
+                        );
+                        if (!mounted) return;
+                        Navigator.pop(dialogContext);
+                        setState(() {
+                          _adminEmployeesFuture = null;
+                          _employeeRowsAt = null;
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Staff transferred successfully.')),
+                        );
+                      } catch (error) {
+                        if (!dialogContext.mounted) return;
+                        setDialogState(() => saving = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Transfer failed: $error')),
+                        );
+                      }
+                    },
+            ),
+          ],
+        ),
+      ),
+    ).whenComplete(reason.dispose);
+  }
+
+  Future<void> _showSupabaseEmployeeEdit(Map<String, dynamic> employee) async {
+    final employeeId = employee['employee_id']?.toString().trim() ?? '';
+    _ensureEmployeeSession();
+    Map<String, dynamic> salaryDefault;
+    final id = _dashboardBranchKey(employeeId);
+    final cachedAt = _employeeSalaryCacheTime[id];
+    if (_employeeSalaryCache.containsKey(id) &&
+        cachedAt != null &&
+        DateTime.now().difference(cachedAt) < const Duration(seconds: 30)) {
+      salaryDefault = Map<String, dynamic>.from(_employeeSalaryCache[id]!);
+    } else {
+      if (_employeeEditLoading) return;
+      _employeeEditLoading = true;
+      final request = ++_employeeEditRequest;
+      var cancelled = false;
+      BuildContext? loadingContext;
+      final session = NeonApi.sessionVersion;
+      unawaited(showDialog<void>(
+          context: context,
+          builder: (dialogContext) {
+            loadingContext = dialogContext;
+            return AlertDialog(
+                title: const Text('Edit Employee'),
+                content: const Row(children: [
+                  SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                  SizedBox(width: 16),
+                  Expanded(child: Text('Loading current employee information…'))
+                ]),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      child: const Text('Cancel'))
+                ]);
+          }).then((_) {
+        cancelled = true;
+        if (request == _employeeEditRequest) _employeeEditLoading = false;
+      }));
+      try {
+        final data = await service.loadEmployeeEditData(employeeId);
+        if (cancelled || !mounted || session != NeonApi.sessionVersion) return;
+        employee.addAll(Map<String, dynamic>.from(data['employee'] as Map));
+        salaryDefault =
+            Map<String, dynamic>.from(data['salary_defaults'] as Map);
+        _employeeSalaryCache[id] = Map<String, dynamic>.from(salaryDefault);
+        _employeeSalaryCacheTime[id] = DateTime.now();
+        if (loadingContext?.mounted == true) Navigator.pop(loadingContext!);
+      } catch (error) {
+        if (!cancelled && loadingContext?.mounted == true)
+          Navigator.pop(loadingContext!);
+        if (mounted && !cancelled)
+          _message('Unable to load employee edit information: $error');
+        return;
+      } finally {
+        if (request == _employeeEditRequest) _employeeEditLoading = false;
+      }
+    }
+    if (!mounted) return;
+
+    TextEditingController make(String key) =>
+        TextEditingController(text: employee[key]?.toString() ?? '');
+    TextEditingController makeSalary(String key) =>
+        TextEditingController(text: salaryDefault[key]?.toString() ?? '0');
+    final isForeignEmployee =
+        '${employee['address'] ?? ''} ${salaryDefault['address'] ?? ''}'
+            .toUpperCase()
+            .contains('FRN');
+    final existingName = employee['name']?.toString().trim() ?? '';
+    final firstName = TextEditingController(
+      text: employee['first_name']?.toString().trim().isNotEmpty == true
+          ? employee['first_name'].toString().trim()
+          : existingName,
+    );
+    final lastName = TextEditingController(
+      text: employee['last_name']?.toString().trim() ?? '',
+    );
+    final fields = <String, TextEditingController>{
+      if (!isForeignEmployee) 'Name': make('name'),
+      'Designation': make('designation'),
+      'Department': make('department'),
+      'Email': make('email'),
+      'IC No.': make('new_ic_no'),
+      'Bank Code': make('bank_code'),
+      'Bank Account': make('bank_account'),
+      'EPF No.': make('epf_no'),
+      'SOCSO No.': make('socso_no'),
+      'Phone': make('phone'),
+      'Address': make('address'),
+    };
+    String salaryTransferMethod = SalaryTransfer.resolve(
+      employee['salary_transfer_method'],
+      fields['Bank Account']!.text,
+    );
+    final salaryFields = <String, TextEditingController>{
+      'Basic Salary (RM)': makeSalary('basic_salary'),
+      'FW Salary (RM)': makeSalary('fw_salary'),
+      'Elaun Kedatangan (RM)': makeSalary('elaun_kedatangan'),
+      'Elaun Perkhidmatan (RM)': makeSalary('elaun_perkhidmatan'),
+      'Elaun Kerajinan (RM)': makeSalary('elaun_kerajinan'),
+      'Elaun Makanan (RM)': makeSalary('elaun_makanan'),
+      'PCB (RM)': makeSalary('pcb'),
+      'Zakat (RM)': makeSalary('zakat'),
+    };
+    final leaveFields = <String, TextEditingController>{
+      'annual_leave_balance': TextEditingController(
+          text: employee['annual_leave_balance']?.toString() ?? ''),
+      'medical_leave_balance': TextEditingController(
+          text: employee['medical_leave_balance']?.toString() ?? ''),
+    };
+    final mcOpeningMonth = TextEditingController(
+        text: employee['medical_leave_opening_month'] == null
+            ? DateFormat('yyyy-MM').format(selectedDashboardMonth)
+            : employee['medical_leave_opening_month']
+                .toString()
+                .substring(0, 7));
+    final incrementDetails = TextEditingController(
+      text: salaryDefault['inc_details']?.toString() ?? '',
+    );
+    var epfCategory = salaryDefault['epf_category']?.toString().trim() ?? '';
+    if (!const {'normal', 'normal1'}.contains(epfCategory)) {
+      epfCategory = 'normal1';
+    }
+    var eisApplicable = salaryDefault['eis_applicable'] == null ||
+        salaryDefault['eis_applicable'] == true ||
+        salaryDefault['eis_applicable'].toString().toLowerCase() == 'true';
+    bool enabledByDefault(String key) =>
+        salaryDefault[key] == null ||
+        salaryDefault[key] == true ||
+        salaryDefault[key].toString().toLowerCase() == 'true';
+    var epfEnabled = enabledByDefault('epf_enabled');
+    var eisEnabled = enabledByDefault('eis_enabled');
+    var socsoEnabled = enabledByDefault('socso_enabled');
+    var socsoCategory =
+        salaryDefault['socso_category']?.toString().toLowerCase() == 'type2'
+            ? 'type2'
+            : 'type1';
+    DateTime? joiningDate =
+        DateTime.tryParse(employee['joining_date']?.toString() ?? '');
+    DateTime? birthday =
+        DateTime.tryParse(employee['birthday']?.toString() ?? '');
+    var employmentStatus = _employmentStatus(employee);
+    var managementStaff = employee['is_management_staff'] == true ||
+        employee['is_management_staff']?.toString().toLowerCase() == 'true';
+    var tempStaff = employee['is_temp_staff'] == true ||
+        employee['is_temp_staff']?.toString().toLowerCase() == 'true';
+    var supportStaff = employee['is_support_staff'] == true ||
+        employee['is_support_staff']?.toString().toLowerCase() == 'true';
+    var otherStaff = employee['is_other_staff'] == true ||
+        employee['is_other_staff']?.toString().toLowerCase() == 'true';
+    String payrollBranchId =
+        _normalizeBranchValue(employee['payroll_branch_id']);
+    var saving = false;
+    Widget sectionHeading(IconData icon, String title, String subtitle) =>
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 20, color: const Color(0xFF173A78)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w700)),
+                    Text(subtitle,
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF6F7785))),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+    Widget settingSwitch({
+      required IconData icon,
+      required Color color,
+      required String label,
+      required bool value,
+      required ValueChanged<bool>? onChanged,
+    }) =>
+        Container(
+          height: 56,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .55),
+            border: Border.all(color: const Color(0xFFCED3DD)),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: SwitchListTile(
+            dense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+            secondary: Icon(icon, color: color, size: 20),
+            title: Text(label),
+            value: value,
+            onChanged: onChanged,
+          ),
+        );
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Edit Employee - All Information'),
+          content: SizedBox(
+              width: (MediaQuery.sizeOf(dialogContext).width - 80)
+                  .clamp(320.0, 1180.0)
+                  .toDouble(),
+              height: (MediaQuery.sizeOf(dialogContext).height * .78)
+                  .clamp(360.0, 900.0)
+                  .toDouble(),
+              child: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  sectionHeading(
+                    Icons.badge_outlined,
+                    'Personal Information',
+                    'Identity, contact and employment profile details.',
+                  ),
+                  _responsiveFormGrid(children: [
+                    TextFormField(
+                        initialValue: employee['employee_id']?.toString() ?? '',
+                        enabled: false,
+                        decoration:
+                            const InputDecoration(labelText: 'Employee ID')),
+                    if (isForeignEmployee) ...[
+                      TextField(
+                        controller: firstName,
+                        enabled: !saving,
+                        maxLines: 1,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          labelText: 'First Name',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      TextField(
+                        controller: lastName,
+                        enabled: !saving,
+                        maxLines: 1,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          labelText: 'Last Name',
+                          helperText: 'Printed first on EPF and SOCSO reports.',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                    SalaryTransferField(
+                      account: fields['Bank Account']!,
+                      method: salaryTransferMethod,
+                      enabled: !saving,
+                      onChanged: (value) =>
+                          setDialogState(() => salaryTransferMethod = value),
+                    ),
+                    ...fields.entries.map((field) => TextField(
+                        controller: field.value,
+                        enabled: !saving,
+                        maxLines: 1,
+                        decoration: InputDecoration(
+                            labelText: field.key,
+                            border: const OutlineInputBorder()))),
+                  ]),
+                  const Divider(height: 28),
+                  sectionHeading(
+                      Icons.event_available_outlined,
+                      'Leave Balances',
+                      'Balances in days. AL is visible to the employee; MC is admin-only.'),
+                  _responsiveFormGrid(children: [
+                    for (final entry in leaveFields.entries)
+                      TextField(
+                          controller: entry.value,
+                          enabled: !saving,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          decoration: InputDecoration(
+                              labelText: entry.key == 'annual_leave_balance'
+                                  ? 'AL balance (days)'
+                                  : 'MC opening balance (days)',
+                              helperText:
+                                  'Leave blank if not uploaded; decimals such as 0.5 are supported.',
+                              border: const OutlineInputBorder())),
+                  ]),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: mcOpeningMonth,
+                      enabled: !saving,
+                      decoration: const InputDecoration(
+                          labelText: 'MC opening month (YYYY-MM)',
+                          helperText:
+                              'MC is calculated from this opening month; previous monthly openings are retained.',
+                          border: OutlineInputBorder())),
+                  const Divider(height: 28),
+                  sectionHeading(
+                    Icons.payments_outlined,
+                    'Salary & Statutory Settings',
+                    'Default payroll amounts and contribution settings.',
+                  ),
+                  _responsiveFormGrid(children: [
+                    ...salaryFields.entries.map((field) => TextField(
+                          controller: field.value,
+                          enabled: !saving,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: field.key,
+                            border: const OutlineInputBorder(),
+                          ),
+                        )),
+                    TextField(
+                      controller: incrementDetails,
+                      enabled: !saving,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: const InputDecoration(
+                        labelText: 'Increment Details (inc_details)',
+                        hintText: 'Example: SEPT-26/150',
+                        helperText:
+                            'KENAIKAN TERAKHIR value. Leave empty when not applicable.',
+                        helperMaxLines: 2,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    DropdownButtonFormField<String>(
+                      initialValue: epfCategory,
+                      decoration: const InputDecoration(
+                        labelText: 'EPF Category',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'normal1',
+                          child: Text('Normal 1 (statutory schedule)'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'normal',
+                          child: Text('Normal (2% employee + employer)'),
+                        ),
+                      ],
+                      onChanged: saving
+                          ? null
+                          : (value) => setDialogState(
+                                () => epfCategory = value ?? 'normal1',
+                              ),
+                    ),
+                    settingSwitch(
+                      icon: Icons.account_balance_wallet,
+                      color: const Color(0xFF3957C5),
+                      label: 'EPF Enabled',
+                      value: epfEnabled,
+                      onChanged: saving
+                          ? null
+                          : (value) => setDialogState(() => epfEnabled = value),
+                    ),
+                    settingSwitch(
+                      icon: Icons.health_and_safety,
+                      color: const Color(0xFF16A36A),
+                      label: 'SOCSO Enabled',
+                      value: socsoEnabled,
+                      onChanged: saving
+                          ? null
+                          : (value) =>
+                              setDialogState(() => socsoEnabled = value),
+                    ),
+                    DropdownButtonFormField<String>(
+                      initialValue: socsoCategory,
+                      decoration: const InputDecoration(
+                        labelText: 'SOCSO Category',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'type1',
+                          child: Text('Type 1 - Employer + Employee'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'type2',
+                          child: Text('Type 2 - Employer Only'),
+                        ),
+                      ],
+                      onChanged: saving || !socsoEnabled
+                          ? null
+                          : (value) => setDialogState(
+                              () => socsoCategory = value ?? 'type1'),
+                    ),
+                    settingSwitch(
+                      icon: Icons.verified_user,
+                      color: const Color(0xFFFF8A34),
+                      label: 'EIS Enabled',
+                      value: eisEnabled,
+                      onChanged: saving
+                          ? null
+                          : (value) => setDialogState(() => eisEnabled = value),
+                    ),
+                  ]),
+                  const Divider(height: 28),
+                  sectionHeading(
+                    Icons.work_outline,
+                    'Employment Details',
+                    'Dates, branch assignment and current employment status.',
+                  ),
+                  ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Birthday'),
+                      subtitle: Text(birthday == null
+                          ? 'Not set'
+                          : DateFormat('dd MMM yyyy').format(birthday!)),
+                      trailing: const Icon(Icons.cake_outlined),
+                      onTap: saving
+                          ? null
+                          : () async {
+                              final value = await showDatePicker(
+                                  context: dialogContext,
+                                  initialDate: birthday ?? DateTime(1990),
+                                  firstDate: DateTime(1940),
+                                  lastDate: DateTime.now());
+                              if (value != null) {
+                                setDialogState(() => birthday = value);
+                              }
+                            }),
+                  ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Joining Date'),
+                      subtitle: Text(joiningDate == null
+                          ? 'Not set'
+                          : DateFormat('dd MMM yyyy').format(joiningDate!)),
+                      trailing: const Icon(Icons.calendar_month_outlined),
+                      onTap: saving
+                          ? null
+                          : () async {
+                              final value = await showDatePicker(
+                                  context: dialogContext,
+                                  initialDate: joiningDate ?? DateTime.now(),
+                                  firstDate: DateTime(1950),
+                                  lastDate: DateTime(2100));
+                              if (value != null) {
+                                setDialogState(() => joiningDate = value);
+                              }
+                            }),
+                  TextFormField(
+                      initialValue: employee['branch_id']?.toString() ?? '',
+                      enabled: false,
+                      decoration: const InputDecoration(
+                          labelText: 'Branch',
+                          helperText:
+                              'Use Transfer Staff to change branch and retain history.')),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: payrollBranchId,
+                    decoration: const InputDecoration(
+                      labelText: 'Payroll Branch',
+                      helperText:
+                          'Used for payroll lists and exports only. Attendance branch is unchanged.',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: '',
+                        child: Text('Same as attendance branch'),
+                      ),
+                      ...service.branches.map(
+                        (branch) => DropdownMenuItem<String>(
+                          value: _normalizeBranchValue(branch.id),
+                          child: Text(branch.name),
+                        ),
+                      ),
+                    ],
+                    onChanged: saving
+                        ? null
+                        : (value) => setDialogState(
+                              () => payrollBranchId = value ?? '',
+                            ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Employment Status',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: const [
+                        (
+                          'active',
+                          'Active',
+                          Color(0xFF168653),
+                          Icons.check_circle_outline
+                        ),
+                        (
+                          'vacation',
+                          'Vacation',
+                          Color(0xFFE08A00),
+                          Icons.beach_access_outlined
+                        ),
+                        (
+                          'transferred',
+                          'Transferred',
+                          Color(0xFF3567B7),
+                          Icons.swap_horiz
+                        ),
+                        (
+                          'resigned',
+                          'Resigned',
+                          Color(0xFFC13B3B),
+                          Icons.person_off_outlined
+                        ),
+                      ].map((option) {
+                        final selected = employmentStatus == option.$1;
+                        return ChoiceChip(
+                          avatar: Icon(option.$4,
+                              size: 18,
+                              color: selected ? Colors.white : option.$3),
+                          label: Text(option.$2),
+                          selected: selected,
+                          selectedColor: option.$3,
+                          labelStyle: TextStyle(
+                            color: selected ? Colors.white : option.$3,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          side: BorderSide(color: option.$3),
+                          onSelected: saving
+                              ? null
+                              : (_) => setDialogState(
+                                  () => employmentStatus = option.$1),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: employmentStatus == 'resigned'
+                          ? const Color(0xFFFFECEC)
+                          : const Color(0xFFF2F5FA),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      employmentStatus == 'resigned'
+                          ? 'All employee data will be permanently deleted 90 days after saving.'
+                          : employmentStatus == 'vacation'
+                              ? 'Employee remains active while on vacation.'
+                              : employmentStatus == 'transferred'
+                                  ? 'Employee access is inactive; records are retained.'
+                                  : 'Employee access and records remain active.',
+                      style: TextStyle(
+                        color: employmentStatus == 'resigned'
+                            ? const Color(0xFFB3261E)
+                            : const Color(0xFF4E5868),
+                        fontWeight: employmentStatus == 'resigned'
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 28),
+                  sectionHeading(
+                    Icons.groups_outlined,
+                    'Staff Classification',
+                    'Choose at most one special payroll classification.',
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: managementStaff,
+                    title: const Text('Management Staff'),
+                    subtitle: const Text(
+                      'Hidden from branch attendance; salary-default payroll only.',
+                    ),
+                    onChanged: saving
+                        ? null
+                        : (value) => setDialogState(() {
+                              managementStaff = value ?? false;
+                              if (managementStaff) {
+                                tempStaff = false;
+                                supportStaff = false;
+                                otherStaff = false;
+                              }
+                            }),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: tempStaff,
+                    title: const Text('Temporary Staff'),
+                    subtitle: const Text(
+                      'Payroll only; hidden from branch attendance.',
+                    ),
+                    onChanged: saving
+                        ? null
+                        : (value) => setDialogState(() {
+                              tempStaff = value ?? false;
+                              if (tempStaff) {
+                                managementStaff = false;
+                                supportStaff = false;
+                                otherStaff = false;
+                              }
+                            }),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: supportStaff,
+                    title: const Text('Support Staff'),
+                    subtitle: const Text(
+                      'Payroll only; hidden from branch attendance.',
+                    ),
+                    onChanged: saving
+                        ? null
+                        : (value) => setDialogState(() {
+                              supportStaff = value ?? false;
+                              if (supportStaff) {
+                                managementStaff = false;
+                                tempStaff = false;
+                                otherStaff = false;
+                              }
+                            }),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: otherStaff,
+                    title: const Text('Intern/Practical'),
+                    subtitle: const Text(
+                      'Regular attendance and payroll; included in HRDF when eligible.',
+                    ),
+                    onChanged: saving
+                        ? null
+                        : (value) => setDialogState(() {
+                              otherStaff = value ?? false;
+                              if (otherStaff) {
+                                managementStaff = false;
+                                tempStaff = false;
+                                supportStaff = false;
+                              }
+                            }),
+                  ),
+                ]),
+              )),
+          actions: [
+            TextButton(
+                onPressed: saving ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: saving
+                    ? null
+                    : () async {
+                        if (isForeignEmployee &&
+                            (firstName.text.trim().isEmpty ||
+                                lastName.text.trim().isEmpty)) {
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  'First Name and Last Name are required for FRN employees.'),
+                            ),
+                          );
+                          return;
+                        }
+                        final leaveValues = <String, double?>{};
+                        for (final entry in leaveFields.entries) {
+                          final text = entry.value.text.trim();
+                          final value =
+                              text.isEmpty ? null : double.tryParse(text);
+                          if (text.isNotEmpty &&
+                              (value == null ||
+                                  !value.isFinite ||
+                                  value < 0 ||
+                                  value >= 10000 ||
+                                  (value * 100 - (value * 100).round()).abs() >
+                                      .000001)) {
+                            ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                const SnackBar(
+                                    content: Text(
+                                        'AL and MC must be non-negative days with at most two decimal places.')));
+                            return;
+                          }
+                          leaveValues[entry.key] = value;
+                        }
+                        final openingText = mcOpeningMonth.text.trim();
+                        final mcMonth = RegExp(r'^\d{4}-(0[1-9]|1[0-2])$')
+                                .hasMatch(openingText)
+                            ? DateTime.tryParse('$openingText-01')
+                            : null;
+                        if (leaveValues['medical_leave_balance'] != null &&
+                            (mcMonth == null ||
+                                mcMonth.year < 2000 ||
+                                mcMonth.year > 2100)) {
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                              const SnackBar(
+                                  content: Text(
+                                      'Set the MC opening month as YYYY-MM, for example 2026-10.')));
+                          return;
+                        }
+                        final salaryValues = <String, double>{};
+                        for (final field in salaryFields.entries) {
+                          final value = double.tryParse(
+                            field.value.text.trim().replaceAll(',', ''),
+                          );
+                          if (value == null || value < 0) {
+                            ScaffoldMessenger.of(dialogContext).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    '${field.key} must be a valid amount of 0 or more.'),
+                              ),
+                            );
+                            return;
+                          }
+                          salaryValues[field.key] = value;
+                        }
+                        if (employmentStatus == 'resigned' &&
+                            _employmentStatus(employee) != 'resigned') {
+                          final confirmed = await showDialog<bool>(
+                                context: dialogContext,
+                                builder: (confirmationContext) => AlertDialog(
+                                  icon: const Icon(
+                                    Icons.warning_amber_rounded,
+                                    color: Color(0xFFC13B3B),
+                                    size: 34,
+                                  ),
+                                  title:
+                                      const Text('Mark employee as resigned?'),
+                                  content: const Text(
+                                    'The employee account will be disabled and all employee data will be permanently deleted after 90 days.',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(
+                                          confirmationContext, false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    FilledButton(
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor:
+                                            const Color(0xFFC13B3B),
+                                      ),
+                                      onPressed: () => Navigator.pop(
+                                          confirmationContext, true),
+                                      child: const Text('Confirm Resignation'),
+                                    ),
+                                  ],
+                                ),
+                              ) ??
+                              false;
+                          if (!confirmed) return;
+                        }
+                        setDialogState(() => saving = true);
+                        try {
+                          final active = employmentStatus == 'active' ||
+                              employmentStatus == 'vacation';
+                          if (active != _isActive(employee)) {
+                            await service.updateEmployeeActiveStatus(
+                              employeeId: employee['employee_id'],
+                              isActive: active,
+                            );
+                          }
+                          final savedFirstName = firstName.text.trim();
+                          final savedLastName = lastName.text.trim();
+                          final selectedTransfer = SalaryTransfer.resolve(
+                            salaryTransferMethod,
+                            fields['Bank Account']!.text,
+                          );
+                          final employeePayload = <String, dynamic>{
+                            ...leaveValues,
+                            'medical_leave_opening_month':
+                                leaveValues['medical_leave_balance'] == null
+                                    ? null
+                                    : '$openingText-01',
+                            'name': isForeignEmployee
+                                ? '$savedFirstName $savedLastName'.trim()
+                                : fields['Name']!.text.trim(),
+                            'first_name':
+                                isForeignEmployee ? savedFirstName : null,
+                            'last_name':
+                                isForeignEmployee ? savedLastName : null,
+                            'designation': fields['Designation']!.text.trim(),
+                            'department': fields['Department']!.text.trim(),
+                            'email': fields['Email']!.text.trim(),
+                            'new_ic_no': fields['IC No.']!.text.trim(),
+                            'bank_code': fields['Bank Code']!.text.trim(),
+                            'bank_account': fields['Bank Account']!.text.trim(),
+                            'salary_transfer_method': selectedTransfer.isEmpty
+                                ? null
+                                : selectedTransfer,
+                            'epf_no': fields['EPF No.']!.text.trim(),
+                            'socso_no': fields['SOCSO No.']!.text.trim(),
+                            'phone': fields['Phone']!.text.trim(),
+                            'address': fields['Address']!.text.trim(),
+                            'joining_date':
+                                joiningDate?.toIso8601String().split('T').first,
+                            'birthday':
+                                birthday?.toIso8601String().split('T').first,
+                            'is_active': active,
+                            'employment_status': employmentStatus,
+                            'is_management_staff': managementStaff,
+                            'is_temp_staff': tempStaff,
+                            'is_support_staff': supportStaff,
+                            'is_other_staff': otherStaff,
+                            'payroll_branch_id': payrollBranchId.isEmpty
+                                ? null
+                                : payrollBranchId,
+                          };
+                          await SupabaseService.updateEmployee(
+                              employee['employee_id'], employeePayload);
+                          final salaryDefaultsPayload = <String, dynamic>{
+                            'employee_id': employeeId,
+                            'basic_salary': salaryValues['Basic Salary (RM)'],
+                            'fw_salary': salaryValues['FW Salary (RM)'],
+                            'elaun_kedatangan':
+                                salaryValues['Elaun Kedatangan (RM)'],
+                            'elaun_perkhidmatan':
+                                salaryValues['Elaun Perkhidmatan (RM)'],
+                            'elaun_kerajinan':
+                                salaryValues['Elaun Kerajinan (RM)'],
+                            'elaun_makanan': salaryValues['Elaun Makanan (RM)'],
+                            'pcb': salaryValues['PCB (RM)'],
+                            'zakat': salaryValues['Zakat (RM)'],
+                            'inc_details': incrementDetails.text.trim().isEmpty
+                                ? null
+                                : incrementDetails.text.trim().toUpperCase(),
+                            'epf_category': epfCategory,
+                            'eis_applicable': eisApplicable,
+                            'epf_enabled': epfEnabled,
+                            'eis_enabled': eisEnabled,
+                            'socso_enabled': socsoEnabled,
+                            'socso_category': socsoCategory,
+                            'address': fields['Address']!.text.trim(),
+                          };
+                          try {
+                            await SupabaseService.database
+                                .from('employee_salary_defaults')
+                                .upsert(salaryDefaultsPayload,
+                                    onConflict: 'employee_id');
+                          } catch (error) {
+                            final text = error.toString().toLowerCase();
+                            final addressColumnMissing =
+                                text.contains('pgrst204') &&
+                                    text.contains("'address'") &&
+                                    text.contains('employee_salary_defaults');
+                            if (!addressColumnMissing) rethrow;
+                            salaryDefaultsPayload.remove('address');
+                            await SupabaseService.database
+                                .from('employee_salary_defaults')
+                                .upsert(salaryDefaultsPayload,
+                                    onConflict: 'employee_id');
+                          }
+                          employee.addAll(employeePayload);
+                          employee['_salary_defaults'] =
+                              Map<String, dynamic>.from(salaryDefaultsPayload);
+                          _employeeSalaryCache[id] =
+                              Map<String, dynamic>.from(salaryDefaultsPayload);
+                          _employeeSalaryCacheTime[id] = DateTime.now();
+                          for (final row in _employeeRowsSnapshot ??
+                              <Map<String, dynamic>>[]) {
+                            if (_dashboardBranchKey(row['employee_id']) == id)
+                              row.addAll(employee);
+                          }
+                          if (_employeeRowsSnapshot != null) {
+                            _employeeRowsSnapshot =
+                                _scopedEmployeeRows(_employeeRowsSnapshot!);
+                          }
+                          unawaited(service.loadEmployeesFromSupabase());
+                          if (!mounted) return;
+                          Navigator.pop(dialogContext);
+                          setState(() {
+                            _adminEmployeesFuture = null;
+                            _employeeRowsAt = null;
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content:
+                                      Text('Employee updated successfully.')));
+                        } catch (error) {
+                          if (!dialogContext.mounted) return;
+                          setDialogState(() => saving = false);
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                              SnackBar(
+                                  content: Text(
+                                      'Failed to update employee: $error')));
+                        }
+                      },
+                child: Text(saving ? 'Saving...' : 'Save All Information')),
+          ],
+        ),
+      ),
+    ).whenComplete(() {
+      for (final item in fields.values) {
+        item.dispose();
+      }
+      for (final item in salaryFields.values) {
+        item.dispose();
+      }
+      for (final controller in leaveFields.values) {
+        controller.dispose();
+      }
+      mcOpeningMonth.dispose();
+      incrementDetails.dispose();
+      firstName.dispose();
+      lastName.dispose();
+    });
+  }
+
+  // ===========================================================================  // OT REQUEST APPROVAL
+  // ===========================================================================
+
+  Future<List<Map<String, dynamic>>> _loadOtRequests() {
+    return _otRequestsFuture ??= SupabaseService.getPendingOtRequests();
+  }
+
+  void _refreshOtRequests() {
+    setState(() => _otRequestsFuture = null);
+  }
+
+  Future<List<Map<String, dynamic>>> _employeeMonthlyOtRequests(
+    Map<String, dynamic> request,
+  ) async {
+    final employeeId = request['employee_id']?.toString().trim() ?? '';
+    final selectedDate =
+        DateTime.tryParse(request['overtime_date']?.toString() ?? '');
+    if (employeeId.isEmpty || selectedDate == null) return [request];
+    final rows = await SupabaseService.getEmployeeOtRequests(employeeId);
+    final monthly = rows
+        .where((row) {
+          final date =
+              DateTime.tryParse(row['overtime_date']?.toString() ?? '');
+          return date != null &&
+              date.year == selectedDate.year &&
+              date.month == selectedDate.month;
+        })
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList()
+      ..sort((a, b) => (a['overtime_date'] ?? '')
+          .toString()
+          .compareTo((b['overtime_date'] ?? '').toString()));
+    return monthly.isEmpty ? [request] : monthly;
+  }
+
+  Future<void> _showEmployeeOtRequestsForm(
+    List<Map<String, dynamic>> employeeRequests,
+  ) async {
+    if (employeeRequests.isEmpty) return;
+    final requests = employeeRequests
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList()
+      ..sort((a, b) => (b['overtime_date'] ?? '')
+          .toString()
+          .compareTo((a['overtime_date'] ?? '').toString()));
+    final first = requests.first;
+    final employeeId = first['employee_id']?.toString() ?? '-';
+    final employee = service.employeeById(employeeId);
+    final requestName = first['employee_name']?.toString().trim() ?? '';
+    final name =
+        employee?.name ?? (requestName.isNotEmpty ? requestName : employeeId);
+    final branch = employee?.branchId.isNotEmpty == true
+        ? employee!.branchId
+        : first['branch_id']?.toString() ?? '-';
+    final department = employee?.department.isNotEmpty == true
+        ? employee!.department
+        : first['department']?.toString() ?? '-';
+    final selectedIds = <String>{};
+    final controllers = <String, TextEditingController>{};
+    for (final request in requests) {
+      final id = request['id']?.toString() ?? '';
+      final requested =
+          int.tryParse(request['requested_minutes']?.toString() ?? '') ?? 0;
+      controllers[id] = TextEditingController(
+        text: _otMinutesText(
+          int.tryParse(request['approved_minutes']?.toString() ?? '') ??
+              requested,
+        ),
+      );
+    }
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) {
+            final pending = requests
+                .where((row) => row['status']?.toString() == 'pending_admin')
+                .toList();
+            Future<void> approveSelected() async {
+              if (selectedIds.isEmpty) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('Select at least one pending OT request.'),
+                  ),
+                );
+                return;
+              }
+              try {
+                final selected = requests.where(
+                  (row) => selectedIds.contains(row['id']?.toString()),
+                );
+                final approvals = <({String id, int minutes})>[];
+                for (final request in selected) {
+                  final id = request['id'].toString();
+                  final minutes = _parseOtMinutes(controllers[id]!.text);
+                  if (minutes == null) {
+                    throw Exception(
+                      'Enter approved time as HH:MM for ${request['overtime_date']}.',
+                    );
+                  }
+                  approvals.add((id: id, minutes: minutes));
+                }
+                for (final approval in approvals) {
+                  await SupabaseService.reviewOtRequest(
+                    requestId: approval.id,
+                    approve: true,
+                    approvedOtMinutes: approval.minutes,
+                  );
+                }
+                if (!dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
+                _refreshOtRequests();
+                if (mounted) {
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '${approvals.length} selected OT request(s) approved.',
+                      ),
+                    ),
+                  );
+                }
+              } catch (error) {
+                if (!dialogContext.mounted) return;
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  SnackBar(content: Text('Unable to approve requests: $error')),
+                );
+              }
+            }
+
+            return Dialog(
+              insetPadding: const EdgeInsets.all(16),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1120),
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          EmployeePhoto(
+                            name: name,
+                            photoUrl: employee?.photoUrl,
+                            radius: 28,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name,
+                                    style: const TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800)),
+                                Text('$employeeId • $department • $branch'),
+                                Text(
+                                  '${requests.length} request(s) • ${pending.length} waiting for admin',
+                                  style: const TextStyle(color: Colors.black54),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 28),
+                      if (pending.isNotEmpty)
+                        Row(
+                          children: [
+                            TextButton.icon(
+                              onPressed: () => setDialogState(() {
+                                selectedIds
+                                  ..clear()
+                                  ..addAll(pending.map(
+                                      (row) => row['id']?.toString() ?? ''));
+                                selectedIds.remove('');
+                              }),
+                              icon: const Icon(Icons.select_all),
+                              label: const Text('Select all pending'),
+                            ),
+                            TextButton(
+                              onPressed: () =>
+                                  setDialogState(selectedIds.clear),
+                              child: const Text('Clear selection'),
+                            ),
+                          ],
+                        ),
+                      Expanded(
+                        child: ListView.separated(
+                          itemCount: requests.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final request = requests[index];
+                            final id = request['id']?.toString() ?? '';
+                            final status = request['status']?.toString() ?? '';
+                            final canSelect = status == 'pending_admin';
+                            final requested = int.tryParse(
+                                    request['requested_minutes']?.toString() ??
+                                        '') ??
+                                0;
+                            final approver = request['branch_approved_name']
+                                    ?.toString()
+                                    .trim() ??
+                                '';
+                            return Card(
+                              elevation: 0,
+                              color: canSelect
+                                  ? const Color(0xFFFFFCED)
+                                  : Colors.grey.shade50,
+                              child: Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: Row(
+                                  children: [
+                                    Checkbox(
+                                      value: selectedIds.contains(id),
+                                      onChanged: canSelect
+                                          ? (value) => setDialogState(() {
+                                                value == true
+                                                    ? selectedIds.add(id)
+                                                    : selectedIds.remove(id);
+                                              })
+                                          : null,
+                                    ),
+                                    SizedBox(
+                                      width: 96,
+                                      child: Text(
+                                        request['overtime_date']?.toString() ??
+                                            '-',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        '${_shortTime(request['overtime_start'])}–${_shortTime(request['overtime_end'])}  •  ${request['reason'] ?? '-'}\n'
+                                        'Requested ${_otMinutesText(requested)}${approver.isEmpty ? '' : '  •  Branch approved by $approver'}',
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 135,
+                                      child: TextField(
+                                        controller: controllers[id],
+                                        enabled: canSelect,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Approved HH:MM',
+                                          isDense: true,
+                                          border: OutlineInputBorder(),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    IconButton(
+                                      tooltip: 'Open original OT form',
+                                      onPressed: () {
+                                        Navigator.pop(dialogContext);
+                                        Future<void>.delayed(Duration.zero, () {
+                                          if (mounted) {
+                                            _showOtRequestForm(request);
+                                          }
+                                        });
+                                      },
+                                      icon: const Icon(
+                                          Icons.description_outlined),
+                                    ),
+                                    _statusChip(status),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              try {
+                                final bytes = await OtRequestPdfService.build(
+                                  first,
+                                  monthlyRequests: requests,
+                                );
+                                await Printing.layoutPdf(
+                                  onLayout: (_) async => bytes,
+                                );
+                              } catch (error) {
+                                if (!dialogContext.mounted) return;
+                                ScaffoldMessenger.of(dialogContext)
+                                    .showSnackBar(
+                                  SnackBar(
+                                    content:
+                                        Text('Unable to print OT form: $error'),
+                                  ),
+                                );
+                              }
+                            },
+                            icon: const Icon(Icons.print_outlined),
+                            label: const Text('Print all requests'),
+                          ),
+                          const SizedBox(width: 10),
+                          OutlinedButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            child: const Text('Close'),
+                          ),
+                          const SizedBox(width: 10),
+                          FilledButton.icon(
+                            onPressed:
+                                selectedIds.isEmpty ? null : approveSelected,
+                            icon: const Icon(Icons.check_circle_outline),
+                            label: Text(
+                              'Approve selected (${selectedIds.length})',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    } finally {
+      for (final controller in controllers.values) {
+        controller.dispose();
+      }
+    }
+  }
+
+  Future<void> _showOtRequestForm(Map<String, dynamic> request) async {
+    final employeeId = request['employee_id']?.toString() ?? '-';
+    final name = request['employee_name']?.toString() ?? employeeId;
+    final branch = request['branch_id']?.toString() ?? '-';
+    final department = request['department']?.toString() ?? '-';
+    final date = request['overtime_date']?.toString() ?? '-';
+    final status = request['status']?.toString() ?? 'pending_branch';
+    String stamp(dynamic value) {
+      final parsed = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+      return parsed == null
+          ? 'Waiting'
+          : DateFormat('dd/MM/yyyy hh:mm a').format(parsed);
+    }
+
+    final requested =
+        int.tryParse(request['requested_minutes'].toString()) ?? 0;
+    final key = '$employeeId|$date';
+    final approved = TextEditingController(
+      text: _approvedOtInputs[key] ??
+          _otMinutesText(
+              int.tryParse(request['approved_minutes']?.toString() ?? '') ??
+                  requested),
+    );
+
+    Widget cell(String text,
+            {bool header = false,
+            Alignment alignment = Alignment.center,
+            double height = 40}) =>
+        Container(
+          height: height,
+          alignment: alignment,
+          padding: const EdgeInsets.all(6),
+          color: header ? const Color(0xFF3155A4) : null,
+          child: Text(text,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: header ? Colors.white : const Color(0xFF263B73),
+                  fontSize: header ? 10 : 12,
+                  fontWeight: header ? FontWeight.w800 : FontWeight.w600)),
+        );
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: Container(
+          width: 1120,
+          height: MediaQuery.sizeOf(dialogContext).height * .92,
+          color: const Color(0xFFFFFCED),
+          padding: const EdgeInsets.all(18),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(children: [
+                  Container(
+                    color: const Color(0xFF3155A4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    child: const Text('BORANG TUNTUTAN\nKERJA LEBIH MASA',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w900)),
+                  ),
+                  const SizedBox(width: 16),
+                  const Text('Payroll Company',
+                      style: TextStyle(
+                          color: Color(0xFF3155A4),
+                          fontSize: 32,
+                          fontWeight: FontWeight.w900)),
+                  const Spacer(),
+                  IconButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      icon: const Icon(Icons.close)),
+                ]),
+                const SizedBox(height: 12),
+                Table(
+                  border: TableBorder.all(
+                      color: const Color(0xFF3155A4), width: 1.1),
+                  columnWidths: const {
+                    0: FixedColumnWidth(90),
+                    1: FlexColumnWidth(),
+                    2: FixedColumnWidth(105),
+                    3: FlexColumnWidth(),
+                  },
+                  children: [
+                    TableRow(children: [
+                      cell('NAMA'),
+                      cell(name, alignment: Alignment.centerLeft),
+                      cell('CAWANGAN'),
+                      cell(branch, alignment: Alignment.centerLeft),
+                    ]),
+                    TableRow(children: [
+                      cell('BAHAGIAN'),
+                      cell(department, alignment: Alignment.centerLeft),
+                      cell('NO. PEKERJA'),
+                      cell(employeeId, alignment: Alignment.centerLeft),
+                    ]),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Table(
+                  border: TableBorder.all(
+                      color: const Color(0xFF3155A4), width: 1.1),
+                  columnWidths: const {
+                    0: FixedColumnWidth(42),
+                    1: FixedColumnWidth(110),
+                    2: FixedColumnWidth(105),
+                    3: FixedColumnWidth(115),
+                    4: FixedColumnWidth(105),
+                    5: FixedColumnWidth(130),
+                    6: FlexColumnWidth(),
+                    7: FixedColumnWidth(130),
+                  },
+                  children: [
+                    TableRow(children: [
+                      cell('NO', header: true),
+                      cell('TARIKH', header: true),
+                      cell('MASA\nMASUK', header: true),
+                      cell('KELUAR\nSEBENAR', header: true),
+                      cell('KELUAR', header: true),
+                      cell('JUMLAH LEBIH MASA\n(JAM:MINIT)', header: true),
+                      cell('SEBAB\nLEBIH MASA', header: true),
+                      cell('DISAHKAN\nOLEH', header: true),
+                    ]),
+                    TableRow(children: [
+                      cell('1'),
+                      cell(date),
+                      cell(_shortTime(request['shift_start'])),
+                      cell(_shortTime(request['overtime_start'])),
+                      cell(_shortTime(request['overtime_end'])),
+                      cell(_otMinutesText(requested)),
+                      cell(request['reason']?.toString() ?? '-'),
+                      cell(status.toUpperCase()),
+                    ]),
+                    for (var row = 2; row <= 8; row++)
+                      TableRow(children: [
+                        cell('$row'),
+                        cell(''),
+                        cell(''),
+                        cell(''),
+                        cell(''),
+                        cell(''),
+                        cell(''),
+                        cell(''),
+                      ]),
+                  ],
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 7),
+                  child: Text(
+                    'Tuntutan kerja lebih masa tidak sah sekiranya tiada kelulusan oleh pengurus cawangan dengan sebab yang munasabah.',
+                    style: TextStyle(color: Color(0xFF3155A4), fontSize: 11),
+                  ),
+                ),
+                Row(children: [
+                  Expanded(
+                      child: cell(
+                          'DIMOHON OLEH\n$name\n${stamp(request['submitted_at'])}',
+                          header: true,
+                          height: 80)),
+                  Expanded(
+                      child: cell(
+                          'DISEMAK OLEH\n${request['branch_approved_name']?.toString().trim().isNotEmpty == true ? request['branch_approved_name'] : branch}\n${stamp(request['branch_approved_at'])}',
+                          header: true,
+                          height: 80)),
+                  Expanded(
+                      child: cell(
+                          'DISAHKAN OLEH\nADMIN\n${stamp(request['admin_approved_at'])}',
+                          header: true,
+                          height: 80)),
+                ]),
+                const SizedBox(height: 14),
+                Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      try {
+                        final monthlyRequests =
+                            await _employeeMonthlyOtRequests(request);
+                        final bytes = await OtRequestPdfService.build(
+                          request,
+                          monthlyRequests: monthlyRequests,
+                        );
+                        await Printing.layoutPdf(onLayout: (_) async => bytes);
+                      } catch (error) {
+                        if (!dialogContext.mounted) return;
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          SnackBar(
+                              content: Text('Unable to print OT form: $error')),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.print_outlined),
+                    label: const Text('Print'),
+                  ),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    width: 160,
+                    child: TextField(
+                      controller: approved,
+                      enabled:
+                          status == 'pending_admin' || status == 'approved',
+                      decoration: const InputDecoration(
+                          labelText: 'Approved HH:MM',
+                          border: OutlineInputBorder(),
+                          isDense: true),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  if (status == 'pending_admin') ...[
+                    OutlinedButton(
+                      onPressed: () async {
+                        Navigator.pop(dialogContext);
+                        await _reviewOtRequest(request, false);
+                      },
+                      child: const Text('Reject'),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (status == 'pending_admin' || status == 'approved')
+                    FilledButton(
+                      onPressed: () async {
+                        _approvedOtInputs[key] = approved.text;
+                        Navigator.pop(dialogContext);
+                        await _reviewOtRequest(request, true,
+                            approvedText: approved.text);
+                      },
+                      child: Text(
+                          status == 'approved' ? 'Update Approval' : 'Approve'),
+                    ),
+                ]),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    approved.dispose();
+  }
+
+  Widget _otRequestsPage() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('OT Requests',
+                        style: TextStyle(
+                            fontSize: 26, fontWeight: FontWeight.w800)),
+                    SizedBox(height: 4),
+                    Text(
+                      'Select an employee to review and approve their OT requests.',
+                      style: TextStyle(color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: _refreshOtRequests,
+                tooltip: 'Refresh OT requests',
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _loadOtRequests(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Unable to load OT requests:\n${snapshot.error}',
+                      textAlign: TextAlign.center,
+                    ),
+                  );
+                }
+                final requests =
+                    snapshot.data ?? const <Map<String, dynamic>>[];
+                if (requests.isEmpty) {
+                  return const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _PowerEmptyIcon(
+                            Icons.more_time_rounded, Color(0xFF7C3AED)),
+                        SizedBox(height: 12),
+                        Text('No OT requests.',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  );
+                }
+                final grouped = <String, List<Map<String, dynamic>>>{};
+                for (final request in requests) {
+                  final id = request['employee_id']?.toString().trim() ?? '';
+                  grouped.putIfAbsent(id, () => []).add(request);
+                }
+                final groups = grouped.entries.toList()
+                  ..sort((a, b) =>
+                      (service.employeeById(a.key)?.name ?? a.key).compareTo(
+                        service.employeeById(b.key)?.name ?? b.key,
+                      ));
+                return ListView.separated(
+                  itemCount: groups.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final group = groups[index];
+                    final rows = group.value;
+                    final first = rows.first;
+                    final employeeId = group.key.isEmpty ? '-' : group.key;
+                    final employee = service.employeeById(employeeId);
+                    final storedName =
+                        first['employee_name']?.toString().trim() ?? '';
+                    final name = employee?.name ??
+                        (storedName.isEmpty ? employeeId : storedName);
+                    final branch = employee?.branchId.isNotEmpty == true
+                        ? employee!.branchId
+                        : first['branch_id']?.toString() ?? '-';
+                    final department = employee?.department.isNotEmpty == true
+                        ? employee!.department
+                        : first['department']?.toString() ?? '-';
+                    final pending = rows
+                        .where((row) =>
+                            row['status']?.toString() == 'pending_admin')
+                        .length;
+                    final approved = rows
+                        .where((row) => row['status']?.toString() == 'approved')
+                        .length;
+                    return Card(
+                      elevation: 0,
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        onTap: () => _showEmployeeOtRequestsForm(rows),
+                        leading: EmployeePhoto(
+                          name: name,
+                          photoUrl: employee?.photoUrl,
+                          radius: 24,
+                        ),
+                        title: Text(name,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: Text(
+                          '$employeeId • $department • $branch\n'
+                          '${rows.length} request(s) • $pending waiting for admin • $approved approved',
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (pending > 0)
+                              Chip(label: Text('$pending pending')),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.chevron_right),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _legacyOtRequestsPage() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('OT Requests',
+                        style: TextStyle(
+                            fontSize: 26, fontWeight: FontWeight.w800)),
+                    SizedBox(height: 4),
+                    Text(
+                        'Review overtime requests separately from employee requests.',
+                        style: TextStyle(color: Colors.black54)),
+                  ],
+                ),
+              ),
+              IconButton(
+                  onPressed: _refreshOtRequests,
+                  tooltip: 'Refresh OT requests',
+                  icon: const Icon(Icons.refresh)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _loadOtRequests(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                      child: Text(
+                          'Unable to load OT requests:\n${snapshot.error}',
+                          textAlign: TextAlign.center));
+                }
+                final requests =
+                    snapshot.data ?? const <Map<String, dynamic>>[];
+                if (requests.isEmpty) {
+                  return const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _PowerEmptyIcon(
+                            Icons.more_time_rounded, Color(0xFF7C3AED)),
+                        SizedBox(height: 12),
+                        Text('No pending OT requests.',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  itemCount: requests.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final request = requests[index];
+                    final employeeId =
+                        request['employee_id']?.toString() ?? '-';
+                    final employee = service.employeeById(employeeId);
+                    final employeeName = employee?.name ?? employeeId;
+                    final branchId = request['branch_id']?.toString() ?? '-';
+                    final date = request['overtime_date']?.toString() ?? '-';
+                    final minutes =
+                        request['requested_minutes']?.toString() ?? '0';
+                    final approvedMinutes =
+                        request['approved_minutes']?.toString();
+                    final requestKey = '$employeeId|$date';
+                    _approvedOtInputs.putIfAbsent(
+                        requestKey,
+                        () => _otMinutesText(
+                            int.tryParse(approvedMinutes ?? minutes) ?? 0));
+                    final shiftStart = _shortTime(request['shift_start']);
+                    final shiftEnd = _shortTime(request['shift_end']);
+                    final actualStart =
+                        (request['overtime_start'] ?? '-').toString();
+                    final actualEnd =
+                        (request['overtime_end'] ?? '-').toString();
+                    final reason = request['reason']?.toString() ?? '-';
+                    final status = request['status']?.toString() ?? 'pending';
+                    final branchApprover =
+                        request['branch_approved_name']?.toString().trim() ??
+                            '';
+                    final canAdminApprove = status == 'pending_admin';
+                    return Card(
+                      elevation: 0,
+                      child: ListTile(
+                        onTap: () => _showOtRequestForm(request),
+                        leading:
+                            const CircleAvatar(child: Icon(Icons.more_time)),
+                        title: Text(employeeName,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: Text(
+                          '$employeeId • $branchId • $date'
+                          '${branchApprover.isEmpty ? '' : '\nApproved by: $branchApprover'}',
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _otInfo('Shift', '$shiftStart–$shiftEnd'),
+                            const SizedBox(width: 12),
+                            _otInfo('Actual', '$actualStart–$actualEnd'),
+                            const SizedBox(width: 12),
+                            _otInfo('Reason', reason),
+                            const SizedBox(width: 12),
+                            _otInfo('Requested',
+                                _otMinutesText(int.tryParse(minutes) ?? 0)),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                                width: 135,
+                                child: TextFormField(
+                                  initialValue: _approvedOtInputs[requestKey],
+                                  enabled:
+                                      canAdminApprove || status == 'approved',
+                                  decoration: const InputDecoration(
+                                      labelText: 'Approved HH:MM',
+                                      isDense: true),
+                                  onChanged: (value) =>
+                                      _approvedOtInputs[requestKey] = value,
+                                )),
+                            const SizedBox(width: 10),
+                            if (canAdminApprove) ...[
+                              OutlinedButton(
+                                onPressed: () =>
+                                    _reviewOtRequest(request, false),
+                                child: const Text('Reject'),
+                              ),
+                              const SizedBox(width: 8),
+                              FilledButton(
+                                onPressed: () => _reviewOtRequest(request, true,
+                                    approvedText:
+                                        _approvedOtInputs[requestKey]),
+                                child: const Text('Approve'),
+                              ),
+                            ] else if (status == 'approved') ...[
+                              _statusChip(status),
+                              const SizedBox(width: 8),
+                              FilledButton.tonal(
+                                onPressed: () => _reviewOtRequest(request, true,
+                                    approvedText:
+                                        _approvedOtInputs[requestKey]),
+                                child: const Text('Update approval'),
+                              ),
+                            ] else
+                              _statusChip(status),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _reviewOtRequest(
+    Map<String, dynamic> request,
+    bool approve, {
+    String? approvedText,
+  }) async {
+    try {
+      if (approve && request['status']?.toString() == 'pending_branch') {
+        throw Exception('Branch approval is required before admin approval.');
+      }
+      final approvedMinutes =
+          approve ? _parseOtMinutes(approvedText ?? '') : null;
+      if (approve && approvedMinutes == null) {
+        throw Exception('Enter approved OT as HH:MM, for example 01:30.');
+      }
+      await SupabaseService.reviewOtRequest(
+        requestId: request['id'].toString(),
+        approve: approve,
+        approvedOtMinutes: approvedMinutes,
+      );
+      await NotificationService.send(
+        title: approve ? 'OT Request Approved' : 'OT Request Rejected',
+        body: approve
+            ? 'Your OT request has received final admin approval.'
+            : 'Your OT request was rejected by admin.',
+        audience: 'employee',
+        employeeId: request['employee_id']?.toString(),
+        type: approve ? 'approval' : 'rejection',
+      ).catchError(
+        (error) => debugPrint('OT admin notification error: $error'),
+      );
+      _refreshOtRequests();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  approve ? 'OT request approved.' : 'OT request rejected.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Unable to review OT request: $e')));
+      }
+    }
+  }
+
+  Widget _otInfo(String label, String value) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: const TextStyle(fontSize: 10, color: Colors.black54)),
+          Text(value,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))
+        ],
+      );
+
+  String _shortTime(dynamic value) {
+    final text = value?.toString() ?? '';
+    return text.length >= 5 ? text.substring(0, 5) : 'Not assigned';
+  }
+
+  String _otMinutesText(int minutes) =>
+      '${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
+
+  int? _parseOtMinutes(String value) {
+    final match = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(value.trim());
+    if (match == null) return null;
+    final hours = int.tryParse(match.group(1)!);
+    final minutes = int.tryParse(match.group(2)!);
+    if (hours == null || minutes == null || minutes > 59) return null;
+    final total = hours * 60 + minutes;
+    return total <= 1440 ? total : null;
+  }
+
+  // EMPLOYEE REQUEST APPROVAL
+  // ===========================================================================
+
+  Future<List<Map<String, dynamic>>> _loadEmployeeRequests() {
+    return _employeeRequestsFuture ??= SupabaseService.getEmployeeRequests(
+        status:
+            _employeeRequestStatus == 'ALL' ? null : _employeeRequestStatus);
+  }
+
+  void _refreshEmployeeRequests() {
+    setState(() => _employeeRequestsFuture = null);
+  }
+
+  Widget _employeeRequestsPage() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Employee Requests',
+                        style: TextStyle(
+                            fontSize: 26, fontWeight: FontWeight.w800)),
+                    SizedBox(height: 4),
+                    Text(
+                        'Verify branch submissions, assign an Employee ID, then approve.',
+                        style: TextStyle(color: Colors.black54)),
+                  ],
+                ),
+              ),
+              DropdownButton<String>(
+                value: _employeeRequestStatus,
+                items: const [
+                  DropdownMenuItem(value: 'PENDING', child: Text('Pending')),
+                  DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
+                  DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
+                  DropdownMenuItem(value: 'ALL', child: Text('All statuses')),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() {
+                    _employeeRequestStatus = value;
+                    _employeeRequestsFuture = null;
+                  });
+                },
+              ),
+              IconButton(
+                onPressed: _refreshEmployeeRequests,
+                tooltip: 'Refresh requests',
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _loadEmployeeRequests(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                      child: Text(
+                          'Unable to load employee requests:\n${snapshot.error}',
+                          textAlign: TextAlign.center));
+                }
+                final requests =
+                    snapshot.data ?? const <Map<String, dynamic>>[];
+                if (requests.isEmpty) {
+                  return Center(
+                      child: Text(_employeeRequestStatus == 'PENDING'
+                          ? 'No pending employee requests. Select All statuses to view history.'
+                          : 'No employee requests for this status.'));
+                }
+                return ListView.separated(
+                  itemCount: requests.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final request = requests[index];
+                    final name =
+                        request['name']?.toString() ?? 'Unnamed employee';
+                    final branch = request['branch_id']?.toString() ?? '-';
+                    final requestedAt = _logDateText(request['requested_at']);
+                    final details = <String>[
+                      if (request['designation']
+                              ?.toString()
+                              .trim()
+                              .isNotEmpty ==
+                          true)
+                        'Designation: ${request['designation']}',
+                      if (request['department']?.toString().trim().isNotEmpty ==
+                          true)
+                        'Department: ${request['department']}',
+                      if (request['new_ic_no']?.toString().trim().isNotEmpty ==
+                          true)
+                        'IC: ${request['new_ic_no']}',
+                      if (request['email']?.toString().trim().isNotEmpty ==
+                          true)
+                        'Email: ${request['email']}',
+                      if (request['phone']?.toString().trim().isNotEmpty ==
+                          true)
+                        'Phone: ${request['phone']}',
+                      if (request['joining_date']
+                              ?.toString()
+                              .trim()
+                              .isNotEmpty ==
+                          true)
+                        'Joining: ${request['joining_date']}',
+                      if (request['bank_code']?.toString().trim().isNotEmpty ==
+                          true)
+                        'Bank: ${request['bank_code']} ${request['bank_account'] ?? ''}',
+                      if (request['address']?.toString().trim().isNotEmpty ==
+                          true)
+                        'Address: ${request['address']}',
+                    ];
+                    return Card(
+                      elevation: 0,
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const CircleAvatar(
+                                child: Icon(Icons.person_outline)),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(name,
+                                      style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700)),
+                                  const SizedBox(height: 3),
+                                  Text('$branch • Requested $requestedAt',
+                                      style: const TextStyle(
+                                          color: Colors.black54, fontSize: 12)),
+                                  if (details.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 14,
+                                      runSpacing: 5,
+                                      children: details
+                                          .map((detail) => Text(detail,
+                                              style: const TextStyle(
+                                                  fontSize: 12)))
+                                          .toList(),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            if (request['status'] == 'PENDING') ...[
+                              OutlinedButton.icon(
+                                onPressed: () => _editEmployeeRequest(request),
+                                icon: const Icon(Icons.edit_outlined),
+                                label: const Text('Edit'),
+                              ),
+                              const SizedBox(width: 8),
+                              OutlinedButton(
+                                onPressed: () =>
+                                    _rejectEmployeeRequest(request),
+                                child: const Text('Reject'),
+                              ),
+                              const SizedBox(width: 8),
+                              FilledButton.icon(
+                                onPressed: () =>
+                                    _approveEmployeeRequest(request),
+                                icon: const Icon(Icons.check),
+                                label: const Text('Approve'),
+                              ),
+                            ] else
+                              _statusChip(request['status']?.toString() ?? ''),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editEmployeeRequest(Map<String, dynamic> request) async {
+    const labels = <String, String>{
+      'name': 'Name',
+      'designation': 'Designation',
+      'department': 'Department',
+      'email': 'Email',
+      'new_ic_no': 'IC No.',
+      'bank_code': 'Bank Code',
+      'bank_account': 'Bank Account',
+      'phone': 'Phone',
+      'address': 'Address',
+      'joining_date': 'Joining Date (YYYY-MM-DD)',
+    };
+    final fields = {
+      for (final item in labels.entries)
+        item.key:
+            TextEditingController(text: request[item.key]?.toString() ?? '')
+    };
+    var branchId = request['branch_id']?.toString() ?? '';
+    var saving = false;
+    await showDialog(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+              builder: (context, setDialogState) => AlertDialog(
+                title: Text('Edit ${request['name'] ?? 'Employee Request'}'),
+                content: SizedBox(
+                    width: 600,
+                    child: SingleChildScrollView(
+                        child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ...labels.entries.map((item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: TextField(
+                                  controller: fields[item.key],
+                                  enabled: !saving,
+                                  maxLines: item.key == 'address' ? 2 : 1,
+                                  decoration: InputDecoration(
+                                      labelText: item.value,
+                                      border: const OutlineInputBorder())),
+                            )),
+                        DropdownButtonFormField<String>(
+                          initialValue: service.branches
+                                  .any((branch) => branch.id == branchId)
+                              ? branchId
+                              : null,
+                          decoration: const InputDecoration(
+                              labelText: 'Branch',
+                              border: OutlineInputBorder()),
+                          items: service.branches
+                              .map((branch) => DropdownMenuItem(
+                                  value: branch.id, child: Text(branch.name)))
+                              .toList(),
+                          onChanged: saving
+                              ? null
+                              : (value) => setDialogState(
+                                  () => branchId = value ?? branchId),
+                        ),
+                      ],
+                    ))),
+                actions: [
+                  TextButton(
+                      onPressed:
+                          saving ? null : () => Navigator.pop(dialogContext),
+                      child: const Text('Cancel')),
+                  FilledButton(
+                      onPressed: saving
+                          ? null
+                          : () async {
+                              setDialogState(() => saving = true);
+                              try {
+                                await SupabaseService.updateEmployeeRequest(
+                                  requestId: request['id'].toString(),
+                                  changes: {
+                                    for (final item in fields.entries)
+                                      item.key: item.value.text.trim(),
+                                    'branch_id': branchId
+                                  },
+                                );
+                                if (!mounted) return;
+                                Navigator.pop(dialogContext);
+                                _refreshEmployeeRequests();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text(
+                                            'Employee request updated. You can now approve it.')));
+                              } catch (error) {
+                                if (!dialogContext.mounted) return;
+                                setDialogState(() => saving = false);
+                                ScaffoldMessenger.of(dialogContext)
+                                    .showSnackBar(SnackBar(
+                                        content: Text(
+                                            'Unable to update request: $error')));
+                              }
+                            },
+                      child: Text(saving ? 'Saving...' : 'Save Changes')),
+                ],
+              ),
+            ));
+    for (final field in fields.values) {
+      field.dispose();
+    }
+  }
+
+  Future<void> _approveEmployeeRequest(Map<String, dynamic> request) async {
+    final employeeId = TextEditingController();
+    String? error;
+    var saving = false;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Approve ${request['name'] ?? 'Employee'}'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Branch: ${request['branch_id'] ?? '-'}'),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: employeeId,
+                  enabled: !saving,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: 'Assign Employee ID *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 10),
+                  Text(error!, style: const TextStyle(color: Colors.red)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: saving ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel')),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      final id = employeeId.text.trim().toUpperCase();
+                      if (id.isEmpty) {
+                        setDialogState(
+                            () => error = 'Employee ID is required.');
+                        return;
+                      }
+                      setDialogState(() {
+                        saving = true;
+                        error = null;
+                      });
+                      try {
+                        await SupabaseService.approveEmployeeRequest(
+                          requestId: request['id'].toString(),
+                          employeeId: id,
+                        );
+                        if (dialogContext.mounted) Navigator.pop(dialogContext);
+                        setState(() {
+                          _employeeRequestsFuture = null;
+                          _adminEmployeesFuture = null;
+                        });
+                        if (mounted) {
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            SnackBar(
+                                content:
+                                    Text('Employee approved with ID $id.')),
+                          );
+                        }
+                      } catch (e) {
+                        if (dialogContext.mounted) {
+                          setDialogState(() {
+                            saving = false;
+                            error = 'Approval failed: $e';
+                          });
+                        }
+                      }
+                    },
+              child: Text(saving ? 'Approving...' : 'Approve Employee'),
+            ),
+          ],
+        ),
+      ),
+    );
+    employeeId.dispose();
+  }
+
+  Future<void> _rejectEmployeeRequest(Map<String, dynamic> request) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reject Employee Request?'),
+        content: Text(
+            'Reject the request for ${request['name'] ?? 'this employee'}?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await SupabaseService.rejectEmployeeRequest(
+          requestId: request['id'].toString());
+      _refreshEmployeeRequests();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Unable to reject request: $e')));
+      }
+    }
+  }
+
+  // BRANCH ACTIVITY LOGS
+  // ===========================================================================
+
+  Future<List<Map<String, dynamic>>> _loadBranchLogs() {
+    return _branchLogsFuture ??= SupabaseService.getBranchActivityLogs(
+      branchId: selectedLogBranchId,
+      date: selectedLogDate,
+    );
+  }
+
+  void _refreshBranchLogs() {
+    setState(() {
+      _branchLogsFuture = null;
+    });
+  }
+
+  DateTime? _logDate(dynamic value) {
+    if (value == null) return null;
+    return DateTime.tryParse(value.toString())?.toLocal();
+  }
+
+  String _logDateText(dynamic value) {
+    final date = _logDate(value);
+    return date == null
+        ? 'Still open'
+        : DateFormat('dd MMM yyyy, hh:mm:ss a').format(date);
+  }
+
+  String _logDuration(Map<String, dynamic> log) {
+    final opened = _logDate(log['opened_at']);
+    final closed = _logDate(log['closed_at']);
+    if (opened == null || closed == null) return '-';
+    final duration = closed.difference(opened);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    return hours > 0
+        ? '${hours}h ${minutes}m ${seconds}s'
+        : '${minutes}m ${seconds}s';
+  }
+
+  String _logAction(dynamic value) {
+    switch (value?.toString()) {
+      case 'BRANCH_LOGIN':
+        return 'Branch login session';
+      case 'ATTENDANCE_OPENED':
+        return 'Attendance opened';
+      case 'ROSTER_ASSIGNED':
+        return 'Roster assigned';
+      default:
+        return value?.toString().replaceAll('_', ' ') ?? 'Activity';
+    }
+  }
+
+  String _logDetails(dynamic value) {
+    if (value is! Map || value.isEmpty) return '';
+    const labels = <String, String>{
+      'username': 'User',
+      'month': 'Month',
+      'week': 'Week',
+      'shift': 'Shift',
+      'shift_start': 'Start',
+      'shift_end': 'End',
+      'break_minutes': 'Break',
+      'off_day': 'OFF',
+      'employee_count': 'Employees',
+      'employee_ids': 'IDs',
+    };
+    final parts = <String>[];
+    for (final entry in value.entries) {
+      final item = entry.value;
+      if (item == null || item.toString().trim().isEmpty) continue;
+      var text = item is List ? item.join(', ') : item.toString();
+      if (entry.key == 'break_minutes') text = '$text min';
+      parts.add('${labels[entry.key] ?? entry.key}: $text');
+    }
+    return parts.join(' • ');
+  }
+
+  Future<void> _showRosterAssignment(Map<String, dynamic> log) async {
+    final branchId = log['branch_id']?.toString().trim() ?? '';
+    final rawDetails = log['details'];
+    final details = rawDetails is Map
+        ? Map<String, dynamic>.from(rawDetails)
+        : <String, dynamic>{};
+    final period = details['month']?.toString() ?? '';
+    final parts = period.split('-');
+    final year = parts.isNotEmpty ? int.tryParse(parts.first) : null;
+    final month = parts.length > 1 ? int.tryParse(parts[1]) : null;
+
+    if (branchId.isEmpty || year == null || month == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('This log does not contain a valid roster period.'),
+      ));
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        child: SizedBox(
+          width: 1100,
+          height: 720,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '$branchId roster - ${DateFormat('MMMM yyyy').format(DateTime(year, month))}',
+                        style: const TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.pop(dialogContext),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(),
+              Expanded(
+                child: MonthlyRosterPage(
+                  branchId: branchId,
+                  initialMonth: DateTime(year, month),
+                  readOnly: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _branchLogsPage() {
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Branch Activity Logs',
+                        style: TextStyle(
+                            fontSize: 21, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 2),
+                    Text('Monitor branch login and employee attendance access.',
+                        style: TextStyle(color: Colors.black54)),
+                  ],
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedLogDate ?? DateTime.now(),
+                    firstDate: DateTime(2022),
+                    lastDate: DateTime(DateTime.now().year + 2),
+                  );
+                  if (picked != null && mounted) {
+                    setState(() {
+                      selectedLogDate = picked;
+                      _branchLogsFuture = null;
+                    });
+                  }
+                },
+                icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                label: Text(selectedLogDate == null
+                    ? 'All dates'
+                    : DateFormat('dd MMM yyyy').format(selectedLogDate!)),
+              ),
+              if (selectedLogDate != null)
+                IconButton(
+                  tooltip: 'Show all dates',
+                  onPressed: () => setState(() {
+                    selectedLogDate = null;
+                    _branchLogsFuture = null;
+                  }),
+                  icon: const Icon(Icons.close, size: 18),
+                ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 220,
+                child: DropdownButtonFormField<String>(
+                  initialValue: selectedLogBranchId,
+                  decoration: const InputDecoration(
+                      labelText: 'Branch', border: OutlineInputBorder()),
+                  hint: const Text('All branches'),
+                  items: [
+                    const DropdownMenuItem<String>(
+                        value: null, child: Text('All branches')),
+                    ...service.branches
+                        .map((branch) => DropdownMenuItem<String>(
+                              value: branch.id,
+                              child: Text(branch.name),
+                            )),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      selectedLogBranchId = value;
+                      _branchLogsFuture = null;
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              IconButton(
+                  onPressed: _refreshBranchLogs,
+                  tooltip: 'Refresh logs',
+                  icon: const Icon(Icons.refresh)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _loadBranchLogs(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                      child: Text(
+                          'Unable to load branch logs:\n${snapshot.error}',
+                          textAlign: TextAlign.center));
+                }
+                final logs = snapshot.data ?? const <Map<String, dynamic>>[];
+                if (logs.isEmpty) {
+                  return const Center(
+                      child: Text('No branch activity has been recorded yet.'));
+                }
+                return ListView.separated(
+                  itemCount: logs.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 4),
+                  itemBuilder: (context, index) {
+                    final log = logs[index];
+                    final employeeName =
+                        log['employee_name']?.toString().trim() ?? '';
+                    final employeeId =
+                        log['employee_id']?.toString().trim() ?? '';
+                    final isOpen = log['closed_at'] == null;
+                    final isRoster =
+                        log['action']?.toString() == 'ROSTER_ASSIGNED';
+                    final detailsText = _logDetails(log['details']);
+                    final employeeText = employeeName.isEmpty
+                        ? employeeId
+                        : '$employeeName${employeeId.isEmpty ? '' : ' ($employeeId)'}';
+                    return Card(
+                      elevation: 0,
+                      margin: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        side: BorderSide(
+                          color: index.isEven ? _midnight : _champagne,
+                          width: 1.8,
+                        ),
+                      ),
+                      child: ListTile(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        leading: CircleAvatar(
+                          radius: 16,
+                          backgroundColor: isOpen
+                              ? Colors.orange.shade50
+                              : Colors.green.shade50,
+                          child: Icon(
+                              isOpen
+                                  ? Icons.visibility_outlined
+                                  : Icons.history,
+                              color: isOpen ? Colors.orange : Colors.green),
+                        ),
+                        title: Text(
+                            '${log['branch_id'] ?? '-'} • ${_logAction(log['action'])}',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${employeeText.isEmpty ? '' : '$employeeText • '}'
+                              '${_logDateText(log['opened_at'])} → ${_logDateText(log['closed_at'])}',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            if (detailsText.isNotEmpty)
+                              Text(
+                                detailsText,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 11, color: Colors.black54),
+                              ),
+                          ],
+                        ),
+                        trailing: isRoster
+                            ? OutlinedButton.icon(
+                                onPressed: () => _showRosterAssignment(log),
+                                icon: const Icon(Icons.calendar_view_month,
+                                    size: 17),
+                                label: const Text('View roster'),
+                              )
+                            : Text(_logDuration(log),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600)),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ATTENDANCE
+  // ===========================================================================
+
+  // ===========================================================================
+// ATTENDANCE
+// ===========================================================================
+
+  Widget _monthYearSelector({
+    required DateTime value,
+    required ValueChanged<DateTime> onChanged,
+  }) {
+    final currentYear = DateTime.now().year;
+    final years =
+        List<int>.generate(currentYear - 2019 + 2, (index) => 2020 + index);
+    if (!years.contains(value.year)) years.add(value.year);
+    years.sort((a, b) => b.compareTo(a));
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 8,
+      children: [
+        SizedBox(
+          width: 145,
+          child: DropdownButtonFormField<int>(
+            initialValue: value.month,
+            isDense: true,
+            decoration: const InputDecoration(
+                labelText: 'Month',
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
+            items: List.generate(
+                12,
+                (index) => DropdownMenuItem(
+                    value: index + 1,
+                    child: Text(
+                        DateFormat.MMMM().format(DateTime(2000, index + 1))))),
+            onChanged: (month) {
+              if (month != null) onChanged(DateTime(value.year, month));
+            },
+          ),
+        ),
+        SizedBox(
+          width: 115,
+          child: DropdownButtonFormField<int>(
+            initialValue: value.year,
+            isDense: true,
+            decoration: const InputDecoration(
+                labelText: 'Year',
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
+            items: years
+                .map((year) =>
+                    DropdownMenuItem(value: year, child: Text('$year')))
+                .toList(),
+            onChanged: (year) {
+              if (year != null) onChanged(DateTime(year, value.month));
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  bool _mapRecordMatchesMonth(Map<String, dynamic> record, DateTime month) {
+    final raw = record['date'] ?? record['attendance_date'] ?? record['period'];
+    final date =
+        raw is DateTime ? raw : DateTime.tryParse(raw?.toString() ?? '');
+    return date != null && date.year == month.year && date.month == month.month;
+  }
+
+  Widget _attendancePage() {
+    if (selectedAttendanceBranchId != null) {
+      return _branchAttendanceEmployeesPage(selectedAttendanceBranchId!);
+    }
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _attendanceBranchesFuture ??= SupabaseService.getBranches(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'Unable to load branches:\n${snapshot.error}',
+              textAlign: TextAlign.center,
+            ),
+          );
+        }
+
+        final branches = snapshot.data ?? [];
+        return RefreshIndicator(
+          onRefresh: () async => setState(() {
+            _attendanceBranchesFuture = null;
+          }),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Attendance',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  icon: const Icon(Icons.schedule),
+                  label: const Text('Late Report'),
+                  onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => LateReportPage(
+                              month: selectedAttendanceMonth,
+                              branches: branches))),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Select a branch to view submitted employee attendance. Admin can edit submitted attendance.',
+                  style: TextStyle(color: Colors.black54),
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .72),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFD9DDE6)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Choose period and branch',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _monthYearSelector(
+                        value: selectedAttendanceMonth,
+                        onChanged: (value) =>
+                            setState(() => selectedAttendanceMonth = value),
+                      ),
+                      const SizedBox(height: 16),
+                      if (branches.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(32),
+                          child: Center(child: Text('No branches found.')),
+                        )
+                      else
+                        _responsiveBranchButtonRow(
+                          spacing: 8,
+                          buttons: branches.map((branch) {
+                            final id =
+                                (branch['id'] ?? branch['branch_id'] ?? '')
+                                    .toString();
+                            final name =
+                                (branch['name'] ?? branch['branch_name'] ?? id)
+                                    .toString();
+                            return _employeeBranchFilterButton(
+                              label: name,
+                              selected: false,
+                              onTap: () {
+                                if (id.isEmpty) return;
+                                setState(() {
+                                  selectedAttendanceBranchId = id;
+                                  _attendanceSubmissionFilter = 'submitted';
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                    ],
+                  ),
+                ),
+                if (branches.isNotEmpty) ...[
+                  const SizedBox(height: 40),
+                  Center(
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.touch_app_outlined,
+                          size: 40,
+                          color: Colors.black38,
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Select a branch to view attendance',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Submitted, pending and overtime records will appear here.',
+                          style: const TextStyle(color: Colors.black54),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<List<dynamic>> _adminAttendancePageData(String branchId) {
+    final key =
+        '$branchId|${selectedAttendanceMonth.year}|${selectedAttendanceMonth.month}';
+    if (_attendancePageFuture == null || _attendancePageFutureKey != key) {
+      _attendancePageFutureKey = key;
+      _attendancePageFuture = Future.wait([
+        SupabaseService.getBranches(),
+        SupabaseService.getEmployeesByBranch(branchId, activeOnly: true),
+        SupabaseService.getAttendanceByBranchMonth(
+          branchId: branchId,
+          year: selectedAttendanceMonth.year,
+          month: selectedAttendanceMonth.month,
+        ),
+      ]);
+    }
+    return _attendancePageFuture!;
+  }
+
+  void _refreshAdminAttendanceCache() {
+    _attendancePageFuture = null;
+    _attendancePageFutureKey = null;
+  }
+
+  Future<void> _printSelectedAttendance(
+      List<String> ids, String branchId, String branchName) async {
+    if (_attendanceBatchPrinting || ids.isEmpty) return;
+    if (ids.length > 100) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Print up to 100 employees at a time.')));
+      return;
+    }
+    final month = selectedAttendanceMonth;
+    setState(() => _attendanceBatchPrinting = true);
+    try {
+      final data = await service.loadAttendanceBatchPrint(
+          employeeIds: ids, branchId: branchId, month: month);
+      final bytes = await AttendanceBatchPrintService.build(
+          data: data, employeeIds: ids, month: month, branchName: branchName);
+      if (!mounted) return;
+      await Printing.layoutPdf(
+          name:
+              'Attendance_${branchId}_${DateFormat('yyyy_MM').format(month)}.pdf',
+          format: PdfPageFormat.a4,
+          onLayout: (_) async => bytes);
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Unable to print attendance: $error')));
+    } finally {
+      if (mounted) setState(() => _attendanceBatchPrinting = false);
+    }
+  }
+
+  int _attendanceOtMinutes(Map<String, dynamic> record) {
+    final employeeId = (record['employee_id'] ?? '').toString();
+    if (!PayrollCalculationService.isEmployeeOvertimeEligible(employeeId)) {
+      return 0;
+    }
+    final overtime = record['overtime_minutes'];
+    final approved = record['approved_ot_minutes'];
+    // An explicit Admin approval/override is authoritative, including zero.
+    // Otherwise use the automatically calculated attendance OT value.
+    final source = approved ?? overtime;
+    final value = source is num
+        ? source.toInt()
+        : int.tryParse(source?.toString() ?? '') ?? 0;
+    return PayrollCalculationService.eligibleOvertimeMinutes(value);
+  }
+
+  String _attendanceOtHoursText(int minutes) {
+    final hours = minutes ~/ 60;
+    final remainder = minutes % 60;
+    return remainder == 0
+        ? '$hours hour${hours == 1 ? '' : 's'}'
+        : '$hours h ${remainder.toString().padLeft(2, '0')} min';
+  }
+
+  Future<void> _showEmployeeAttendanceOtDays(
+    Map<String, dynamic> employee,
+    List<Map<String, dynamic>> records,
+  ) async {
+    final overtimeDays = records
+        .where((record) => _attendanceOtMinutes(record) > 0)
+        .toList()
+      ..sort((a, b) => (a['attendance_date'] ?? '')
+          .toString()
+          .compareTo((b['attendance_date'] ?? '').toString()));
+    if (overtimeDays.isEmpty) return;
+
+    final employeeId =
+        (employee['employee_id'] ?? employee['id'] ?? '').toString();
+    final name =
+        (employee['name'] ?? employee['full_name'] ?? employeeId).toString();
+    final totalMinutes = overtimeDays.fold<int>(
+      0,
+      (sum, record) => sum + _attendanceOtMinutes(record),
+    );
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.more_time_rounded, color: _midnight),
+            const SizedBox(width: 10),
+            Expanded(child: Text(name)),
+          ],
+        ),
+        content: SizedBox(
+          width: 560,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$employeeId • ${DateFormat('MMMM yyyy').format(selectedAttendanceMonth)}',
+                style: const TextStyle(color: Colors.black54),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${overtimeDays.length} OT day(s) • Total ${_attendanceOtHoursText(totalMinutes)}',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 14),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 420),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: overtimeDays.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final record = overtimeDays[index];
+                    final date = DateTime.tryParse(
+                      (record['attendance_date'] ?? '').toString(),
+                    );
+                    final minutes = _attendanceOtMinutes(record);
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: _champagne.withValues(alpha: .18),
+                        foregroundColor: _midnight,
+                        child: Text(date?.day.toString() ?? '-'),
+                      ),
+                      title: Text(
+                        date == null
+                            ? 'Unknown date'
+                            : DateFormat('EEEE, dd MMMM yyyy').format(date),
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      trailing: Text(
+                        _attendanceOtHoursText(minutes),
+                        style: const TextStyle(
+                          color: _midnight,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _branchAttendanceEmployeesPage(String branchId) {
+    return FutureBuilder<List<dynamic>>(
+      future: _adminAttendancePageData(branchId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('Unable to load attendance:\n${snapshot.error}',
+                  textAlign: TextAlign.center),
+            ),
+          );
+        }
+
+        final printScope =
+            '$branchId|${selectedAttendanceMonth.year}|${selectedAttendanceMonth.month}';
+        if (_attendancePrintScope != printScope) {
+          _attendancePrintScope = printScope;
+          _attendancePrintIds.clear();
+          _attendancePrintMode = false;
+        }
+        final data = snapshot.data ?? const [[], [], []];
+        final branches = List<Map<String, dynamic>>.from(data[0] as List);
+        final employees = List<Map<String, dynamic>>.from(data[1] as List);
+        final attendance = List<Map<String, dynamic>>.from(data[2] as List)
+            .where((record) =>
+                _mapRecordMatchesMonth(record, selectedAttendanceMonth))
+            .toList();
+
+        final byEmployee = <String, List<Map<String, dynamic>>>{};
+        for (final record in attendance) {
+          final id = (record['employee_id'] ?? '').toString();
+          if (id.isEmpty) continue;
+          byEmployee.putIfAbsent(id, () => []).add(record);
+        }
+
+        final submittedEmployeeIds = <String>{
+          for (final entry in byEmployee.entries)
+            if (entry.value
+                .any((record) => _attendanceBool(record['is_submitted'])))
+              entry.key,
+        };
+        final submittedEmployees = employees.where((employee) {
+          final id =
+              (employee['employee_id'] ?? employee['id'] ?? '').toString();
+          return submittedEmployeeIds.contains(id);
+        }).toList();
+        final pendingEmployees = employees.where((employee) {
+          final id =
+              (employee['employee_id'] ?? employee['id'] ?? '').toString();
+          return !submittedEmployeeIds.contains(id);
+        }).toList();
+        final otMinutesByEmployee = <String, int>{};
+        for (final entry in byEmployee.entries) {
+          if (!submittedEmployeeIds.contains(entry.key)) continue;
+          final minutes = entry.value
+              .where((record) => _attendanceBool(record['is_submitted']))
+              .fold<int>(
+                0,
+                (sum, record) => sum + _attendanceOtMinutes(record),
+              );
+          if (minutes > 0) otMinutesByEmployee[entry.key] = minutes;
+        }
+        final otEmployees = submittedEmployees.where((employee) {
+          final id =
+              (employee['employee_id'] ?? employee['id'] ?? '').toString();
+          return (otMinutesByEmployee[id] ?? 0) > 0;
+        }).toList()
+          ..sort((a, b) {
+            final aId = (a['employee_id'] ?? a['id'] ?? '').toString();
+            final bId = (b['employee_id'] ?? b['id'] ?? '').toString();
+            final byMinutes = (otMinutesByEmployee[bId] ?? 0)
+                .compareTo(otMinutesByEmployee[aId] ?? 0);
+            if (byMinutes != 0) return byMinutes;
+            return (a['name'] ?? '').toString().compareTo(
+                  (b['name'] ?? '').toString(),
+                );
+          });
+        final submittedCount = submittedEmployees.length;
+        final pendingCount = employees.length - submittedCount;
+        final search = _attendanceEmployeeSearch.trim().toLowerCase();
+        final displayedEmployees = switch (_attendanceSubmissionFilter) {
+          'pending' => pendingEmployees,
+          'ot' => otEmployees,
+          _ => submittedEmployees,
+        };
+        final filteredEmployees = displayedEmployees.where((employee) {
+          if (search.isEmpty) return true;
+          final id = (employee['employee_id'] ?? employee['id'] ?? '')
+              .toString()
+              .toLowerCase();
+          final name = (employee['name'] ?? employee['full_name'] ?? '')
+              .toString()
+              .toLowerCase();
+          return id.contains(search) || name.contains(search);
+        }).toList();
+
+        final branch = branches.firstWhere(
+          (item) =>
+              (item['id'] ?? item['branch_id'] ?? '').toString() == branchId,
+          orElse: () => <String, dynamic>{},
+        );
+        final branchName =
+            (branch['name'] ?? branch['branch_name'] ?? branchId).toString();
+
+        return RefreshIndicator(
+          onRefresh: () async => setState(() {
+            _refreshAdminAttendanceCache();
+          }),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextButton.icon(
+                  onPressed: () =>
+                      setState(() => selectedAttendanceBranchId = null),
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Back to branches'),
+                ),
+                const SizedBox(height: 8),
+                Text(branchName,
+                    style: const TextStyle(
+                        fontSize: 28, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 6),
+                Text(
+                  '$submittedCount of ${employees.length} attendance records submitted'
+                  '${search.isEmpty ? '' : ' • ${filteredEmployees.length} matching'}',
+                  style: const TextStyle(color: Colors.black54),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  children: [
+                    _attendanceCountCard(
+                      label: 'Submitted',
+                      count: submittedCount,
+                      icon: Icons.check_circle_outline,
+                      color: _midnight,
+                      selected: _attendanceSubmissionFilter == 'submitted',
+                      onTap: () => setState(
+                        () => _attendanceSubmissionFilter = 'submitted',
+                      ),
+                    ),
+                    _attendanceCountCard(
+                      label: 'Pending',
+                      count: pendingCount,
+                      icon: Icons.schedule_outlined,
+                      color: _champagne,
+                      selected: _attendanceSubmissionFilter == 'pending',
+                      onTap: () => setState(
+                        () => _attendanceSubmissionFilter = 'pending',
+                      ),
+                    ),
+                    _attendanceCountCard(
+                      label: 'OT Employees',
+                      count: otEmployees.length,
+                      icon: Icons.more_time_rounded,
+                      color: const Color(0xFF7C3AED),
+                      selected: _attendanceSubmissionFilter == 'ot',
+                      onTap: () => setState(
+                        () => _attendanceSubmissionFilter = 'ot',
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _attendanceBatchPrinting
+                          ? null
+                          : () => setState(() {
+                                _attendancePrintMode = !_attendancePrintMode;
+                                _attendancePrintIds.clear();
+                              }),
+                      icon: const Icon(Icons.print_outlined),
+                      label: Text(
+                          _attendancePrintMode ? 'Cancel selection' : 'Print'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .68),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFD9DDE6)),
+                  ),
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.end,
+                    children: [
+                      _monthYearSelector(
+                        value: selectedAttendanceMonth,
+                        onChanged: (value) => setState(() {
+                          selectedAttendanceMonth = value;
+                          _refreshAdminAttendanceCache();
+                        }),
+                      ),
+                      SizedBox(
+                        width: (MediaQuery.sizeOf(context).width - 80)
+                            .clamp(220.0, 300.0),
+                        child: TextField(
+                          controller: _attendanceEmployeeSearchController,
+                          onChanged: (value) =>
+                              setState(() => _attendanceEmployeeSearch = value),
+                          decoration: InputDecoration(
+                            labelText: 'Search employee',
+                            hintText: 'Name or employee ID',
+                            isDense: true,
+                            prefixIcon: const Icon(Icons.search, size: 20),
+                            suffixIcon: _attendanceEmployeeSearch.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Clear search',
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () {
+                                      _attendanceEmployeeSearchController
+                                          .clear();
+                                      setState(
+                                        () => _attendanceEmployeeSearch = '',
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (_attendancePrintMode)
+                  Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Wrap(
+                          spacing: 10,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text('${_attendancePrintIds.length} selected'),
+                            const Text(
+                                'A4 front & back · Two-sided / long-edge printing'),
+                            TextButton(
+                                onPressed: _attendanceBatchPrinting
+                                    ? null
+                                    : () => setState(() {
+                                          _attendancePrintIds.addAll(
+                                              filteredEmployees.map((e) =>
+                                                  (e['employee_id'] ??
+                                                          e['id'] ??
+                                                          '')
+                                                      .toString()));
+                                        }),
+                                child: const Text('Select visible')),
+                            TextButton(
+                                onPressed: _attendanceBatchPrinting
+                                    ? null
+                                    : () => setState(_attendancePrintIds.clear),
+                                child: const Text('Clear selection')),
+                            FilledButton.icon(
+                                onPressed: _attendanceBatchPrinting ||
+                                        _attendancePrintIds.isEmpty
+                                    ? null
+                                    : () => _printSelectedAttendance(
+                                        List<String>.from(_attendancePrintIds),
+                                        branchId,
+                                        branchName),
+                                icon: const Icon(Icons.print),
+                                label: Text(_attendanceBatchPrinting
+                                    ? 'Preparing PDF...'
+                                    : 'Print selected')),
+                          ])),
+                if (filteredEmployees.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 54),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          const Icon(Icons.event_busy_outlined, size: 40),
+                          const SizedBox(height: 10),
+                          Text(
+                            search.isNotEmpty
+                                ? 'No employees match your search.'
+                                : _attendanceSubmissionFilter == 'pending'
+                                    ? 'No pending attendance.'
+                                    : _attendanceSubmissionFilter == 'ot'
+                                        ? 'No overtime recorded.'
+                                        : 'No submitted attendance yet.',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 340,
+                      mainAxisExtent: 132,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                    ),
+                    itemCount: filteredEmployees.length,
+                    itemBuilder: (context, index) {
+                      final employee = filteredEmployees[index];
+                      final employeeId =
+                          (employee['employee_id'] ?? employee['id'] ?? '')
+                              .toString();
+                      final name = (employee['name'] ??
+                              employee['full_name'] ??
+                              employeeId)
+                          .toString();
+                      final records = byEmployee[employeeId] ??
+                          const <Map<String, dynamic>>[];
+                      final showingOt = _attendanceSubmissionFilter == 'ot';
+                      final otRecords = records
+                          .where((record) =>
+                              _attendanceBool(record['is_submitted']) &&
+                              _attendanceOtMinutes(record) > 0)
+                          .toList();
+                      final employeeOtMinutes =
+                          otMinutesByEmployee[employeeId] ?? 0;
+                      final submitted = records
+                          .any((r) => _attendanceBool(r['is_submitted']));
+                      final accent = showingOt
+                          ? const Color(0xFF7C3AED)
+                          : submitted
+                              ? const Color(0xFF238A55)
+                              : const Color(0xFFB87800);
+
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: _attendanceBatchPrinting
+                            ? null
+                            : _attendancePrintMode
+                                ? () => setState(() {
+                                      if (!_attendancePrintIds.add(employeeId))
+                                        _attendancePrintIds.remove(employeeId);
+                                    })
+                                : showingOt
+                                    ? () => _showEmployeeAttendanceOtDays(
+                                          employee,
+                                          otRecords,
+                                        )
+                                    : submitted
+                                        ? () => _openAdminAttendance(
+                                              employee,
+                                              branchId,
+                                            )
+                                        : null,
+                        child: Card(
+                          elevation: 0,
+                          color: Colors.white.withValues(alpha: .82),
+                          margin: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            side: BorderSide(
+                              color: const Color(0xFFD5DAE3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(9),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    EmployeePhoto(
+                                      name: name,
+                                      photoUrl:
+                                          employee['photo_url']?.toString(),
+                                      radius: 15,
+                                      backgroundColor:
+                                          accent.withValues(alpha: .13),
+                                      foregroundColor: accent,
+                                      borderColor: accent,
+                                    ),
+                                    if (_attendancePrintMode)
+                                      SizedBox(
+                                          height: 30,
+                                          width: 36,
+                                          child: Checkbox(
+                                              value: _attendancePrintIds
+                                                  .contains(employeeId),
+                                              onChanged:
+                                                  _attendanceBatchPrinting
+                                                      ? null
+                                                      : (checked) =>
+                                                          setState(() {
+                                                            if (checked ==
+                                                                true) {
+                                                              _attendancePrintIds
+                                                                  .add(
+                                                                      employeeId);
+                                                            } else {
+                                                              _attendancePrintIds
+                                                                  .remove(
+                                                                      employeeId);
+                                                            }
+                                                          }))),
+                                    const Spacer(),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 7,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: showingOt
+                                            ? const Color(0xFFF3E8FF)
+                                            : (submitted
+                                                ? Colors.green.shade50
+                                                : Colors.orange.shade50),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        showingOt
+                                            ? 'OT'
+                                            : (submitted
+                                                ? 'SUBMITTED'
+                                                : 'PENDING'),
+                                        style: TextStyle(
+                                          color: showingOt
+                                              ? const Color(0xFF7C3AED)
+                                              : (submitted
+                                                  ? Colors.green.shade700
+                                                  : Colors.orange.shade700),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 7),
+                                Text(
+                                  name,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  'Employee ID: $employeeId',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      showingOt
+                                          ? Icons.more_time_rounded
+                                          : (submitted
+                                              ? Icons.edit_outlined
+                                              : Icons.lock_outline),
+                                      size: 14,
+                                      color: showingOt
+                                          ? const Color(0xFF7C3AED)
+                                          : (submitted
+                                              ? Colors.green.shade700
+                                              : Colors.orange.shade700),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Expanded(
+                                      child: Text(
+                                        showingOt
+                                            ? '${otRecords.length} OT day(s) • ${_attendanceOtHoursText(employeeOtMinutes)}'
+                                            : (submitted
+                                                ? '${records.length} day record(s) • View or edit'
+                                                : 'Waiting for submission'),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.black54,
+                                        ),
+                                      ),
+                                    ),
+                                    if (submitted || showingOt)
+                                      const Icon(
+                                        Icons.chevron_right,
+                                        size: 18,
+                                        color: Colors.black45,
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _attendanceDateText(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
+
+  Future<List<dynamic>> _attendanceStatusPageData() {
+    final key =
+        '$_attendanceStatusMonthly|${_attendanceDateText(_attendanceStatusDate)}|$_attendanceStatusFilter';
+    if (_attendanceStatusFuture == null || _attendanceStatusFutureKey != key) {
+      _attendanceStatusFutureKey = key;
+      _attendanceStatusFuture = Future.wait([
+        SupabaseService.getBranches(),
+        SupabaseService.getActiveEmployees(),
+        AppService.instance.loadNeonAttendance(
+          date: _attendanceStatusMonthly
+              ? null
+              : _attendanceDateText(_attendanceStatusDate),
+          year: _attendanceStatusMonthly ? _attendanceStatusDate.year : null,
+          month: _attendanceStatusMonthly ? _attendanceStatusDate.month : null,
+        ),
+      ]);
+    }
+    return _attendanceStatusFuture!;
+  }
+
+  void _refreshAttendanceStatusView() {
+    _attendanceStatusFuture = null;
+    _attendanceStatusFutureKey = null;
+  }
+
+  Color _attendanceStatusHighlight(String status) =>
+      switch (status.trim().toUpperCase()) {
+        'OFF' => const Color(0xFFFFC107),
+        'PH' => const Color(0xFFE53935),
+        'PH-OFF' => const Color(0xFFF57C00),
+        'PH-SPL' => const Color(0xFF8E24AA),
+        'PH-GANTI' => const Color(0xFF00897B),
+        _ => _midnight,
+      };
+
+  Future<void> _changeAttendanceStatus(
+    Map<String, dynamic> record,
+    String newStatus,
+  ) async {
+    final recordId = (record['id'] ?? '').toString().trim();
+    final employeeId = (record['employee_id'] ?? '').toString().trim();
+    final updateKey = recordId.isNotEmpty
+        ? recordId
+        : '$employeeId|${record['attendance_date'] ?? _attendanceDateText(_attendanceStatusDate)}';
+    if (_attendanceStatusUpdatingIds.contains(updateKey)) return;
+
+    if (newStatus == 'PH-GANTI') {
+      final netMinutes = num.tryParse(
+            (record['net_working_minutes'] ?? record['work_minutes'] ?? '0')
+                .toString(),
+          ) ??
+          0;
+      final workingIn = (record['working_in'] ?? '').toString().trim();
+      final workingOut = (record['working_out'] ?? '').toString().trim();
+      final hasWorkingTime = netMinutes > 0 ||
+          (workingIn.isNotEmpty &&
+              workingIn != '-' &&
+              workingOut.isNotEmpty &&
+              workingOut != '-');
+      if (!hasWorkingTime) {
+        _message('PH-GANTI requires working-in and working-out time.');
+        return;
+      }
+    }
+
+    setState(() => _attendanceStatusUpdatingIds.add(updateKey));
+    try {
+      final values = <String, dynamic>{
+        'status': newStatus,
+        'is_public_holiday':
+            const {'PH', 'PH-OFF', 'PH-SPL', 'PH-GANTI'}.contains(newStatus),
+        'is_unpaid': (newStatus == 'UNPAID' || newStatus == 'UL-UNPAID'),
+      };
+      if (recordId.isNotEmpty) {
+        await SupabaseService.updateAttendance(recordId, values);
+      } else {
+        await SupabaseService.database
+            .from('attendance')
+            .update(values)
+            .eq('employee_id', employeeId)
+            .eq(
+                'attendance_date',
+                record['attendance_date'] ??
+                    _attendanceDateText(_attendanceStatusDate))
+            .select('employee_id,status')
+            .single();
+      }
+      if (!mounted) return;
+      _refreshAttendanceStatusView();
+      setState(() => _attendanceStatusUpdatingIds.remove(updateKey));
+      _message('Attendance status changed to $newStatus.');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _attendanceStatusUpdatingIds.remove(updateKey));
+      _message('Unable to change attendance status: $error');
+    }
+  }
+
+  Future<void> _printAttendanceStatusA4({
+    required List<String> branchIds,
+    required Map<String, String> branchNames,
+    required Map<String, List<Map<String, dynamic>>> grouped,
+  }) async {
+    try {
+      final document = pw.Document();
+      final dateLabel =
+          DateFormat(_attendanceStatusMonthly ? 'MMMM yyyy' : 'dd MMMM yyyy')
+              .format(_attendanceStatusDate);
+      final status = _attendanceStatusFilter;
+      final total =
+          grouped.values.fold<int>(0, (sum, rows) => sum + rows.length);
+
+      document.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(28),
+          header: (_) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Payroll Company',
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                _attendanceStatusMonthly
+                    ? 'MONTHLY ATTENDANCE STATUS REPORT'
+                    : 'DAILY ATTENDANCE STATUS REPORT',
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.Text('Period: $dateLabel   Status: $status   Records: $total'),
+              pw.SizedBox(height: 10),
+            ],
+          ),
+          footer: (context) => pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text(
+              'Page ${context.pageNumber} of ${context.pagesCount}',
+              style: const pw.TextStyle(fontSize: 8),
+            ),
+          ),
+          build: (_) => [
+            for (final branchId in branchIds) ...[
+              pw.Container(
+                width: double.infinity,
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 6,
+                ),
+                color: PdfColors.grey300,
+                child: pw.Text(
+                  '${(branchNames[branchId] ?? branchId).toUpperCase()} '
+                  '(${grouped[branchId]!.length})',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                ),
+              ),
+              pw.TableHelper.fromTextArray(
+                headers: const [
+                  'No.',
+                  'Employee ID',
+                  'Employee Name',
+                  'Status',
+                  'Date'
+                ],
+                data: [
+                  for (var index = 0;
+                      index < grouped[branchId]!.length;
+                      index++)
+                    [
+                      '${index + 1}',
+                      (grouped[branchId]![index]['employee_id'] ?? '-')
+                          .toString(),
+                      (grouped[branchId]![index]['employee_name'] ?? '-')
+                          .toString(),
+                      status,
+                      (grouped[branchId]![index]['attendance_date'] ?? '')
+                          .toString()
+                          .split('T')
+                          .first,
+                    ],
+                ],
+                headerStyle: pw.TextStyle(
+                  fontSize: 9,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+                cellStyle: const pw.TextStyle(fontSize: 9),
+                headerDecoration: const pw.BoxDecoration(
+                  color: PdfColors.grey200,
+                ),
+                columnWidths: const {
+                  0: pw.FixedColumnWidth(30),
+                  1: pw.FixedColumnWidth(85),
+                  2: pw.FlexColumnWidth(),
+                  3: pw.FixedColumnWidth(65),
+                  4: pw.FixedColumnWidth(65),
+                },
+              ),
+              pw.SizedBox(height: 12),
+            ],
+          ],
+        ),
+      );
+
+      await Printing.layoutPdf(
+        name:
+            'attendance-${_attendanceStatusMonthly ? DateFormat('yyyy-MM').format(_attendanceStatusDate) : _attendanceDateText(_attendanceStatusDate)}-$status.pdf',
+        format: PdfPageFormat.a4,
+        onLayout: (_) => document.save(),
+      );
+    } catch (error) {
+      if (mounted) _message('Unable to print A4 report: $error');
+    }
+  }
+
+  Widget _attendanceStatusPage() {
+    const statuses = [
+      'OFF',
+      'MC',
+      'PL',
+      'AL',
+      'EL',
+      'PH',
+      'PH-OFF',
+      'PH-SPL',
+      'PH-GANTI',
+      'UL-UNPAID',
+      'UNPAID',
+    ];
+    return FutureBuilder<List<dynamic>>(
+      future: _attendanceStatusPageData(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Unable to load the status view:\n${snapshot.error}',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+
+        final data = snapshot.data ?? const [[], [], []];
+        final branches = List<Map<String, dynamic>>.from(data[0] as List);
+        final employees = List<Map<String, dynamic>>.from(data[1] as List);
+        final records = List<Map<String, dynamic>>.from(data[2] as List)
+            .where((record) =>
+                (record['status'] ?? '').toString().trim().toUpperCase() ==
+                _attendanceStatusFilter)
+            .toList();
+
+        final employeesById = <String, Map<String, dynamic>>{
+          for (final employee in employees)
+            (employee['employee_id'] ?? employee['id'] ?? '').toString():
+                employee,
+        }..remove('');
+        final branchNames = <String, String>{
+          for (final branch in branches)
+            (branch['id'] ?? branch['branch_id'] ?? '').toString():
+                (branch['name'] ?? branch['branch_name'] ?? '').toString(),
+        }..remove('');
+
+        final grouped = <String, List<Map<String, dynamic>>>{};
+        for (final record in records) {
+          final employeeId = (record['employee_id'] ?? '').toString();
+          final employee =
+              employeesById[employeeId] ?? const <String, dynamic>{};
+          final branchId = (record['branch_id'] ??
+                  employee['branch_id'] ??
+                  employee['branch'] ??
+                  'Unassigned')
+              .toString();
+          grouped.putIfAbsent(branchId, () => []).add({
+            ...record,
+            'employee_name': employee['name'] ??
+                employee['full_name'] ??
+                record['employee_name'] ??
+                employeeId,
+          });
+        }
+        final branchIds = grouped.keys.toList()
+          ..sort(
+              (a, b) => (branchNames[a] ?? a).compareTo(branchNames[b] ?? b));
+        final statusHighlight =
+            _attendanceStatusHighlight(_attendanceStatusFilter);
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            _refreshAttendanceStatusView();
+            setState(() {});
+            await _attendanceStatusPageData();
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _attendanceStatusMonthly
+                      ? 'Monthly Status View'
+                      : 'Daily Status View',
+                  style: const TextStyle(
+                      fontSize: 28, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Choose a day or month and status to see matching employees grouped by branch.',
+                  style: TextStyle(color: Colors.black54),
+                ),
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 140,
+                      child: DropdownButtonFormField<bool>(
+                        initialValue: _attendanceStatusMonthly,
+                        decoration: const InputDecoration(
+                            labelText: 'Period', isDense: true),
+                        items: const [
+                          DropdownMenuItem(value: false, child: Text('Daily')),
+                          DropdownMenuItem(value: true, child: Text('Monthly')),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _attendanceStatusMonthly = value;
+                            _refreshAttendanceStatusView();
+                          });
+                        },
+                      ),
+                    ),
+                    if (_attendanceStatusMonthly) ...[
+                      SizedBox(
+                        width: 150,
+                        child: DropdownButtonFormField<int>(
+                          initialValue: _attendanceStatusDate.month,
+                          decoration: const InputDecoration(
+                              labelText: 'Month', isDense: true),
+                          items: List.generate(
+                              12,
+                              (i) => DropdownMenuItem(
+                                    value: i + 1,
+                                    child: Text(DateFormat('MMMM')
+                                        .format(DateTime(2026, i + 1))),
+                                  )),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _attendanceStatusDate =
+                                  DateTime(_attendanceStatusDate.year, value);
+                              _refreshAttendanceStatusView();
+                            });
+                          },
+                        ),
+                      ),
+                      SizedBox(
+                        width: 110,
+                        child: DropdownButtonFormField<int>(
+                          initialValue: _attendanceStatusDate.year,
+                          decoration: const InputDecoration(
+                              labelText: 'Year', isDense: true),
+                          items: List.generate(
+                              DateTime.now().year - 2018,
+                              (i) => DropdownMenuItem(
+                                    value: 2020 + i,
+                                    child: Text('${2020 + i}'),
+                                  )),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _attendanceStatusDate =
+                                  DateTime(value, _attendanceStatusDate.month);
+                              _refreshAttendanceStatusView();
+                            });
+                          },
+                        ),
+                      ),
+                    ] else
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.calendar_today_outlined),
+                        label: Text(
+                          DateFormat('dd MMM yyyy')
+                              .format(_attendanceStatusDate),
+                        ),
+                        onPressed: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _attendanceStatusDate,
+                            firstDate: DateTime(2020),
+                            lastDate:
+                                DateTime.now().add(const Duration(days: 366)),
+                          );
+                          if (picked == null || !mounted) return;
+                          setState(() {
+                            _attendanceStatusDate = picked;
+                            _refreshAttendanceStatusView();
+                          });
+                        },
+                      ),
+                    SizedBox(
+                      width: 190,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _attendanceStatusFilter,
+                        decoration: const InputDecoration(
+                          labelText: 'Status',
+                          prefixIcon: Icon(Icons.filter_alt_outlined),
+                          isDense: true,
+                        ),
+                        items: statuses
+                            .map((status) => DropdownMenuItem(
+                                  value: status,
+                                  child: Text(status),
+                                ))
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _attendanceStatusFilter = value;
+                            _refreshAttendanceStatusView();
+                          });
+                        },
+                      ),
+                    ),
+                    Chip(
+                      backgroundColor: statusHighlight.withValues(alpha: .16),
+                      side: BorderSide(color: statusHighlight, width: 1.5),
+                      avatar: Icon(
+                        Icons.people_alt_outlined,
+                        size: 18,
+                        color: statusHighlight,
+                      ),
+                      label: Text(
+                        '${records.map((row) => row['employee_id']).toSet().length} employees${_attendanceStatusMonthly ? ' · ${records.length} records' : ''}',
+                        style: TextStyle(
+                          color: statusHighlight,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed: records.isEmpty
+                          ? null
+                          : () => _printAttendanceStatusA4(
+                                branchIds: branchIds,
+                                branchNames: branchNames,
+                                grouped: grouped,
+                              ),
+                      icon: const Icon(Icons.print_outlined),
+                      label: const Text('Print A4'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                if (records.isEmpty)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Center(
+                        child: Text(
+                          'No $_attendanceStatusFilter employees found '
+                          '${_attendanceStatusMonthly ? 'in' : 'on'} '
+                          '${DateFormat(_attendanceStatusMonthly ? 'MMMM yyyy' : 'dd MMM yyyy').format(_attendanceStatusDate)}.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  ...branchIds.map((branchId) {
+                    final branchRecords = grouped[branchId]!;
+                    branchRecords
+                        .sort((a, b) => a['employee_name'].toString().compareTo(
+                              b['employee_name'].toString(),
+                            ));
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Card(
+                        margin: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(
+                            color: statusHighlight.withValues(alpha: .65),
+                            width: 2,
+                          ),
+                        ),
+                        child: ExpansionTile(
+                          initiallyExpanded: true,
+                          leading: const Icon(Icons.storefront_outlined),
+                          title: Text(
+                            branchNames[branchId]?.trim().isNotEmpty == true
+                                ? branchNames[branchId]!
+                                : branchId,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          subtitle: Text(
+                            '${branchRecords.length} $_attendanceStatusFilter',
+                          ),
+                          children: [
+                            const Divider(height: 1),
+                            ...branchRecords.map((record) {
+                              final recordId =
+                                  (record['id'] ?? '').toString().trim();
+                              final employeeId =
+                                  (record['employee_id'] ?? '').toString();
+                              final updateKey = recordId.isNotEmpty
+                                  ? recordId
+                                  : '$employeeId|${record['attendance_date'] ?? _attendanceDateText(_attendanceStatusDate)}';
+                              final updating = _attendanceStatusUpdatingIds
+                                  .contains(updateKey);
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  child: Text(
+                                    record['employee_name']
+                                        .toString()
+                                        .trim()
+                                        .characters
+                                        .first
+                                        .toUpperCase(),
+                                  ),
+                                ),
+                                title: Text(
+                                  record['employee_name'].toString(),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  'Employee ID: ${record['employee_id'] ?? '-'}'
+                                  '${_attendanceStatusMonthly ? ' · ${record['attendance_date'].toString().split('T').first}' : ''}',
+                                ),
+                                trailing: updating
+                                    ? const SizedBox.square(
+                                        dimension: 24,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : PopupMenuButton<String>(
+                                        tooltip: 'Change attendance status',
+                                        onSelected: (value) =>
+                                            _changeAttendanceStatus(
+                                          record,
+                                          value,
+                                        ),
+                                        itemBuilder: (_) => statuses
+                                            .map(
+                                              (value) => PopupMenuItem(
+                                                value: value,
+                                                child: Text(value),
+                                              ),
+                                            )
+                                            .toList(),
+                                        child: Chip(
+                                          backgroundColor: statusHighlight
+                                              .withValues(alpha: .18),
+                                          side: BorderSide(
+                                            color: statusHighlight,
+                                          ),
+                                          avatar: const Icon(
+                                            Icons.edit_outlined,
+                                            size: 16,
+                                          ),
+                                          label: Text(
+                                            _attendanceStatusFilter,
+                                            style: TextStyle(
+                                              color: statusHighlight,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _attendanceCountCard({
+    required String label,
+    required int count,
+    required IconData icon,
+    required Color color,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          width: 170,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: selected ? 0.16 : 0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: color.withValues(alpha: selected ? 0.80 : 0.25),
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 23),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$count',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(label,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                ],
+              ),
+              if (selected) ...[
+                const Spacer(),
+                Icon(Icons.filter_alt, color: color, size: 18),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openDashboardReport(String title) {
+    selectedPayrollMonth = selectedDashboardMonth;
+    if (const {'EPF', 'SOCSO', 'EIS'}.contains(title)) {
+      _showStatutoryReport(title);
+    } else {
+      _showDashboardReport(title);
+    }
+  }
+
+  Widget _dashboardReportCard(
+    double width,
+    String title,
+    IconData icon,
+    Color accent, {
+    String? imageUrl,
+    String? assetName,
+    Uint8List? imageBytes,
+    String? fallbackLabel,
+  }) {
+    final usesLargeBrandLogo =
+        const {'EPF', 'SOCSO', 'EIS', 'HRDF'}.contains(title);
+    Widget fallbackIcon() => fallbackLabel == null
+        ? Icon(icon, color: accent, size: 21)
+        : FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              fallbackLabel,
+              style: TextStyle(
+                color: accent,
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+              ),
+            ),
+          );
+
+    final logo = imageBytes != null
+        ? Image.memory(
+            imageBytes,
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+            errorBuilder: (_, __, ___) => fallbackIcon(),
+          )
+        : imageUrl != null
+            ? Image.network(
+                imageUrl,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => fallbackIcon(),
+              )
+            : assetName != null
+                ? Image.asset(
+                    assetName,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => fallbackIcon(),
+                  )
+                : fallbackIcon();
+    return SizedBox(
+      width: width,
+      height: 116,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _openDashboardReport(title),
+          borderRadius: BorderRadius.circular(12),
+          child: Ink(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E5EB)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: usesLargeBrandLogo
+                      ? 94
+                      : imageBytes != null ||
+                              imageUrl != null ||
+                              assetName != null
+                          ? 44
+                          : 40,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: imageBytes != null ||
+                            imageUrl != null ||
+                            assetName != null
+                        ? Colors.white
+                        : accent.withValues(alpha: .14),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.all(2),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: logo,
+                  ),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        softWrap: true,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF20242D),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: accent, size: 18),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _attendanceBool(dynamic value) {
+    if (value is bool) return value;
+    final text = value?.toString().toLowerCase().trim() ?? '';
+    return text == 'true' || text == '1' || text == 'yes';
+  }
+
+  void _openAdminAttendance(
+    Map<String, dynamic> employee,
+    String branchId,
+  ) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AttendanceDialog(
+        employee: employee,
+        month: selectedAttendanceMonth,
+        branchId: branchId,
+
+        // Same attendance sheet as Branch Portal.
+        editable: true,
+
+        // Admin does NOT submit attendance.
+        showSubmitButton: false,
+
+        // Admin can edit only after Branch has submitted.
+        adminOnlyAfterSubmit: true,
+      ),
+    ).then((_) {
+      if (!mounted) return;
+      _refreshAdminAttendanceCache();
+      setState(() {});
+    });
+  }
+
+// ============================================================================
+// EMPLOYEE CSV IMPORT
+// ============================================================================
+
+  Future<void> _importEmployeesCsv() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+
+      final file = result.files.single;
+      final bytes = file.bytes;
+
+      if (bytes == null || bytes.isEmpty) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to read the selected CSV file.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final csvText = utf8.decode(
+        bytes,
+        allowMalformed: true,
+      );
+
+      final rows = const CsvToListConverter(
+        shouldParseNumbers: false,
+      ).convert(csvText);
+
+      if (rows.isEmpty) {
+        throw Exception('The CSV file is empty.');
+      }
+
+      final headers = rows.first
+          .map(
+            (value) => value.toString().replaceFirst('\uFEFF', '').trim(),
+          )
+          .toList();
+
+      if (headers.isEmpty) {
+        throw Exception('The CSV file has no headers.');
+      }
+
+      const requiredHeaders = [
+        'employeeId',
+        'name',
+        'designation',
+        'department',
+        'email',
+        'newIcNo',
+        'bankCode',
+        'bankAccount',
+        'phone',
+        'address',
+        'joiningDate',
+        'isActive',
+        'branchId',
+      ];
+
+      final missingHeaders =
+          requiredHeaders.where((header) => !headers.contains(header)).toList();
+
+      if (missingHeaders.isNotEmpty) {
+        throw Exception(
+          'Missing required CSV columns:\n'
+          '${missingHeaders.join(', ')}',
+        );
+      }
+
+      String valueAt(
+        List<dynamic> row,
+        String header,
+      ) {
+        final index = headers.indexOf(header);
+
+        if (index < 0 || index >= row.length) {
+          return '';
+        }
+
+        return row[index].toString().trim();
+      }
+
+      bool parseBool(String value) {
+        final normalized = value.toLowerCase().trim();
+
+        return normalized == 'true' ||
+            normalized == '1' ||
+            normalized == 'yes' ||
+            normalized == 'active' ||
+            normalized == 'y';
+      }
+
+      final employeeRows = <Map<String, dynamic>>[];
+
+      for (var i = 1; i < rows.length; i++) {
+        final row = rows[i];
+
+        if (row.isEmpty) {
+          continue;
+        }
+
+        final employeeId = valueAt(
+          row,
+          'employeeId',
+        );
+
+        if (employeeId.isEmpty) {
+          continue;
+        }
+
+        employeeRows.add({
+          'employee_id': employeeId,
+          'name': valueAt(row, 'name'),
+          'designation': valueAt(row, 'designation'),
+          'department': valueAt(row, 'department'),
+          'email': valueAt(row, 'email'),
+          'new_ic_no': valueAt(row, 'newIcNo'),
+          'bank_code': valueAt(row, 'bankCode'),
+          'bank_account': valueAt(row, 'bankAccount'),
+          'phone': valueAt(row, 'phone'),
+          'address': valueAt(row, 'address'),
+          'joining_date': valueAt(
+            row,
+            'joiningDate',
+          ).isEmpty
+              ? null
+              : valueAt(
+                  row,
+                  'joiningDate',
+                ),
+          'is_active': parseBool(
+            valueAt(row, 'isActive'),
+          ),
+          'branch_id': valueAt(
+            row,
+            'branchId',
+          ).isEmpty
+              ? null
+              : valueAt(
+                  row,
+                  'branchId',
+                ),
+        });
+      }
+
+      if (employeeRows.isEmpty) {
+        throw Exception(
+          'No valid employee records were found in the CSV file.',
+        );
+      }
+
+      if (!mounted) return;
+
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const AlertDialog(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(),
+              ),
+              SizedBox(width: 20),
+              Expanded(
+                child: Text(
+                  'Importing employees...',
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      try {
+        await SupabaseService.database.from('employees').upsert(
+              employeeRows,
+              onConflict: 'employee_id',
+            );
+
+        if (!mounted) return;
+
+        Navigator.of(context).pop();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${employeeRows.length} employee record(s) imported successfully.',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        setState(() {});
+      } catch (e) {
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+
+        rethrow;
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Employee CSV import failed: $e',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+// ============================================================================
+// EMPLOYEE CSV IMPORT PAGE
+// ============================================================================
+
+  Widget _importPage() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Import Employees',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Import employee details directly from a CSV file.',
+            style: TextStyle(
+              color: Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 24),
+          _panel(
+            'Employee CSV Import',
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Center(
+                  child: Icon(
+                    Icons.cloud_upload_outlined,
+                    size: 70,
+                    color: Color(0xFF2D55D8),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Import employee records',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Select your employee CSV file. '
+                  'Existing employees are updated using employee_id.',
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F7FB),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: Colors.black12,
+                    ),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Required CSV columns',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      SelectableText(
+                        'employeeId,name,designation,department,email,'
+                        'newIcNo,bankCode,bankAccount,phone,address,'
+                        'joiningDate,isActive,branchId',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _importEmployeesCsv,
+                    icon: const Icon(
+                      Icons.upload_file,
+                    ),
+                    label: const Padding(
+                      padding: EdgeInsets.symmetric(
+                        vertical: 14,
+                      ),
+                      child: Text(
+                        'SELECT CSV FILE & IMPORT',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// ============================================================================
+// PAYROLL GENERATION DIALOG
+// ============================================================================
+
+  Future<void> _showGenerateAttendancePayrollDialog() async {
+    try {
+      final data = await Future.wait<dynamic>([
+        service.loadNeonBranches(),
+        SupabaseService.database
+            .from('employees')
+            .select()
+            .eq('is_active', true),
+      ]);
+      if (!mounted) return;
+      final branches = List<Map<String, dynamic>>.from(data[0]);
+      final employees = List<Map<String, dynamic>>.from(data[1])
+          .where((e) => _employmentStatus(e) == 'active')
+          .toList();
+      final names = <String, String>{
+        for (final branch in branches)
+          _branchIdFromMap(branch):
+              _branchNameFromMap(branch, _branchIdFromMap(branch))
+      };
+      final counts = <String, int>{};
+      for (final employee in employees) {
+        final id = _payrollBranchIdFromEmployee(employee);
+        if (id.isEmpty) continue;
+        names.putIfAbsent(id, () => id);
+        counts[id] = (counts[id] ?? 0) + 1;
+      }
+      final choice = await showDialog<PayrollGenerationChoice>(
+          context: context,
+          builder: (_) => PayrollGenerationDialog(
+              initialMonth: selectedPayrollMonth,
+              branches: names,
+              employeeCounts: counts));
+      if (choice == null || !mounted) return;
+      final selected = employees
+          .where(
+              (e) => choice.branchIds.contains(_payrollBranchIdFromEmployee(e)))
+          .toList();
+      await _showPayrollEmployeeSelection(
+          branchName: '${choice.branchIds.length} selected branches',
+          employees: selected,
+          month: choice.month);
+    } catch (error) {
+      if (mounted) _message('Unable to prepare payroll generation: $error');
+    }
+  }
+
+  Widget _hasaniBranchLogo(double size) => Container(
+        width: size,
+        height: size,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(size * .24),
+          boxShadow: const [
+            BoxShadow(color: Color(0x22000000), blurRadius: 5),
+          ],
+        ),
+        child: const Icon(
+          Icons.storefront_rounded,
+          color: Color(0xFF075FC5),
+        ),
+      );
+
+  IconData _payrollBranchIcon(String branch) =>
+      switch (branch.trim().toUpperCase()) {
+        'ALOR SETAR' => Icons.location_city_rounded,
+        'AMANJAYA' => Icons.auto_awesome_rounded,
+        'ASTANA' => Icons.account_balance_rounded,
+        'GURUN' => Icons.terrain_rounded,
+        'JITRA' => Icons.hub_rounded,
+        'KULIM' => Icons.factory_rounded,
+        'LANGKAWI' => Icons.flight_takeoff_rounded,
+        'PRAI' || 'PERAI' => Icons.anchor_rounded,
+        'SUNGAI PETANI' || 'SP-EDAR' => Icons.storefront_rounded,
+        _ => Icons.business_rounded,
+      };
+
+  List<Color> _payrollBranchColors(String branch) =>
+      switch (branch.trim().toUpperCase()) {
+        'ALOR SETAR' => const [Color(0xFF174CA4), Color(0xFF0A2C68)],
+        'AMANJAYA' => const [Color(0xFF8E44AD), Color(0xFF512E7D)],
+        'ASTANA' => const [Color(0xFF0F8B8D), Color(0xFF075E62)],
+        'GURUN' => const [Color(0xFF2E9B55), Color(0xFF176B3A)],
+        'JITRA' => const [Color(0xFFE05252), Color(0xFF9D2424)],
+        'KULIM' => const [Color(0xFFF09A24), Color(0xFFB85C00)],
+        'LANGKAWI' => const [Color(0xFF168AAD), Color(0xFF075985)],
+        'PRAI' || 'PERAI' => const [Color(0xFF536DFE), Color(0xFF283593)],
+        'SUNGAI PETANI' || 'SP-EDAR' => const [
+            Color(0xFFE83E8C),
+            Color(0xFF9D174D)
+          ],
+        _ => const [Color(0xFF64748B), Color(0xFF334155)],
+      };
+
+  Future<void> _showPayrollEmployeeSelection({
+    required String branchName,
+    required List<Map<String, dynamic>> employees,
+    required DateTime month,
+    VoidCallback? closeBranchDialog,
+  }) async {
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final today = DateTime.now();
+    final isCurrentMonth =
+        month.year == today.year && month.month == today.month;
+    final requiredDayCount = isCurrentMonth ? today.day : daysInMonth;
+    final requiredDays = {
+      for (var day = 1; day <= requiredDayCount; day++) day,
+    };
+    List<Map<String, dynamic>> attendanceRows;
+    try {
+      final employeeIds = employees
+          .map((employee) => _normalizeBranchValue(employee['employee_id']))
+          .where((id) => id.isNotEmpty)
+          .toList();
+      attendanceRows = employeeIds.isEmpty
+          ? <Map<String, dynamic>>[]
+          : await SupabaseService.getAttendanceSubmissionsForEmployeesMonth(
+              employeeIds: employeeIds,
+              month: month,
+            );
+    } catch (error) {
+      if (mounted) {
+        _message('Unable to verify attendance readiness: $error');
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    final submittedDaysByEmployee = <String, Set<int>>{};
+    for (final row in attendanceRows) {
+      final date = DateTime.tryParse(row['attendance_date']?.toString() ?? '');
+      if (date == null ||
+          date.year != month.year ||
+          date.month != month.month ||
+          !_attendanceBool(row['is_submitted'])) {
+        continue;
+      }
+      final id = _normalizeBranchValue(row['employee_id']);
+      if (id.isNotEmpty) {
+        submittedDaysByEmployee.putIfAbsent(id, () => <int>{}).add(date.day);
+      }
+    }
+
+    final missingDaysByEmployee = <String, List<int>>{};
+    final attendanceExemptIds = <String>{};
+    for (final employee in employees) {
+      final id = _normalizeBranchValue(employee['employee_id']);
+      final attendanceExempt =
+          _attendanceBool(employee['is_management_staff']) ||
+              _attendanceBool(employee['is_temp_staff']) ||
+              _attendanceBool(employee['is_support_staff']) ||
+              _attendanceBool(employee['is_other_staff']);
+      if (attendanceExempt) {
+        attendanceExemptIds.add(id);
+        missingDaysByEmployee[id] = const <int>[];
+        continue;
+      }
+      final submitted = submittedDaysByEmployee[id] ?? const <int>{};
+      missingDaysByEmployee[id] = requiredDays.difference(submitted).toList()
+        ..sort();
+    }
+    final readyIds = missingDaysByEmployee.entries
+        .where((entry) => entry.value.isEmpty)
+        .map((entry) => entry.key)
+        .toSet();
+
+    final selectedIds = <String>{};
+    String readinessFilter = 'all';
+    String readinessSearch = '';
+    bool overwriteExisting = true;
+    final expandedMissingIds = <String>{};
+
+    await showDialog<void>(
+      context: context,
+      builder: (selectionContext) {
+        return StatefulBuilder(
+          builder: (context, setSelectionState) {
+            final submittedIds = submittedDaysByEmployee.entries
+                .where((entry) => entry.value.isNotEmpty)
+                .map((entry) => entry.key)
+                .toSet();
+            final displayEmployees = PayrollReadinessSelection.visible(
+                employees,
+                readyIds: readyIds,
+                submittedIds: submittedIds,
+                filter: readinessFilter,
+                search: readinessSearch)
+              ..sort((a, b) {
+                final aId = _normalizeBranchValue(a['employee_id']);
+                final bId = _normalizeBranchValue(b['employee_id']);
+                final aReady = readyIds.contains(aId);
+                final bReady = readyIds.contains(bId);
+                if (aReady != bReady) return aReady ? -1 : 1;
+                return (a['name'] ?? aId)
+                    .toString()
+                    .compareTo((b['name'] ?? bId).toString());
+              });
+
+            final allIds = PayrollReadinessSelection.selectable(
+                displayEmployees, readyIds);
+            final allVisibleSelected =
+                allIds.isNotEmpty && selectedIds.containsAll(allIds);
+            Widget infoTile(String label, String value, IconData icon) =>
+                Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFE),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE4E7EF))),
+                    child: Row(children: [
+                      Icon(icon, color: const Color(0xFFAC771F), size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                            Text(label,
+                                style: const TextStyle(
+                                    fontSize: 10, color: Color(0xFF65738A))),
+                            const SizedBox(height: 3),
+                            Text(value,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF12315E)))
+                          ]))
+                    ]));
+            final compactSelection =
+                MediaQuery.sizeOf(selectionContext).width < 600;
+            Widget arrangeBody(Widget child) =>
+                compactSelection ? SingleChildScrollView(child: child) : child;
+            Widget listArea(Widget child) {
+              final panel = Container(
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE1E6EF))),
+                  child: child);
+              return compactSelection
+                  ? SizedBox(height: 300, child: panel)
+                  : Expanded(child: panel);
+            }
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFFFFFCF8),
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              title: Row(children: [
+                Image.asset('assets/hasani_books_logo.jpg',
+                    width: compactSelection ? 70 : 100,
+                    height: 38,
+                    fit: BoxFit.contain),
+                const SizedBox(width: 12),
+                const Icon(Icons.assignment_outlined, color: Color(0xFFAD761D)),
+                const SizedBox(width: 9),
+                Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text('Generate Payroll • $branchName',
+                          style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF12315E))),
+                      const Text(
+                          'Select employees to generate payroll for the chosen month.',
+                          style:
+                              TextStyle(fontSize: 11, color: Color(0xFF62708A)))
+                    ])),
+                IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(selectionContext).pop(),
+                    icon: const Icon(Icons.close, size: 20)),
+              ]),
+              content: SizedBox(
+                width: 720,
+                height: (MediaQuery.sizeOf(selectionContext).height * .66)
+                    .clamp(300.0, 650.0)
+                    .toDouble(),
+                child: arrangeBody(Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    LayoutBuilder(
+                        builder: (_, box) =>
+                            Wrap(spacing: 10, runSpacing: 8, children: [
+                              for (final item in [
+                                (
+                                  'Payroll Month',
+                                  DateFormat('MMMM yyyy').format(month),
+                                  Icons.calendar_month_outlined
+                                ),
+                                ('Branch', branchName, Icons.groups_outlined),
+                                (
+                                  'Total Employees',
+                                  '${employees.length}',
+                                  Icons.people_outline
+                                )
+                              ])
+                                SizedBox(
+                                    width: box.maxWidth >= 540
+                                        ? (box.maxWidth - 20) / 3
+                                        : box.maxWidth,
+                                    child: infoTile(item.$1, item.$2, item.$3)),
+                            ])),
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: readyIds.length == employees.length
+                            ? const Color(0xFFE8F7EE)
+                            : const Color(0xFFFFF3E0),
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Row(children: [
+                        Icon(
+                          readyIds.length == employees.length
+                              ? Icons.verified_outlined
+                              : Icons.warning_amber_rounded,
+                          color: readyIds.length == employees.length
+                              ? const Color(0xFF168653)
+                              : const Color(0xFFB26700),
+                        ),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Text(
+                            '${readyIds.length} ready • '
+                            '${employees.length - readyIds.length} need follow-up • '
+                            '$requiredDayCount submitted days required'
+                            '${isCurrentMonth ? ' through ${DateFormat('d MMM').format(today)}' : ''}',
+                            style: const TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(height: 10),
+                    LayoutBuilder(builder: (_, box) {
+                      final tabs = Wrap(spacing: 6, runSpacing: 6, children: [
+                        for (final item in [
+                          ('all', 'All', employees.length),
+                          ('ready', 'Ready', readyIds.length),
+                          (
+                            'followup',
+                            'Follow-up',
+                            employees.length - readyIds.length
+                          ),
+                          ('submitted', 'Submitted', submittedIds.length)
+                        ])
+                          ChoiceChip(
+                              label: Text('${item.$2} (${item.$3})',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: readinessFilter == item.$1
+                                          ? Colors.white
+                                          : const Color(0xFF18365E))),
+                              selected: readinessFilter == item.$1,
+                              showCheckmark: false,
+                              selectedColor: const Color(0xFF10346A),
+                              backgroundColor: Colors.white,
+                              side: const BorderSide(color: Color(0xFFE0E5EF)),
+                              shape: const StadiumBorder(),
+                              onSelected: (_) => setSelectionState(
+                                  () => readinessFilter = item.$1)),
+                      ]);
+                      final search = SizedBox(
+                          width: box.maxWidth >= 650 ? 230 : box.maxWidth,
+                          height: 36,
+                          child: TextField(
+                              onChanged: (value) => setSelectionState(
+                                  () => readinessSearch = value),
+                              decoration: InputDecoration(
+                                  hintText: 'Search employee (ID or name)...',
+                                  hintStyle: const TextStyle(fontSize: 11),
+                                  prefixIcon:
+                                      const Icon(Icons.search, size: 17),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  contentPadding: EdgeInsets.zero,
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide: const BorderSide(
+                                          color: Color(0xFFE1E6EF))))));
+                      return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: box.maxWidth >= 700
+                              ? Row(children: [
+                                  Expanded(child: tabs),
+                                  const SizedBox(width: 8),
+                                  search
+                                ])
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                      tabs,
+                                      const SizedBox(height: 8),
+                                      search
+                                    ]));
+                    }),
+                    Container(
+                        decoration: BoxDecoration(
+                            color: const Color(0xFFF0F3F8),
+                            borderRadius: BorderRadius.circular(9)),
+                        child: Row(
+                          children: [
+                            Checkbox(
+                              value: allVisibleSelected,
+                              onChanged: allIds.isEmpty
+                                  ? null
+                                  : (value) {
+                                      setSelectionState(() {
+                                        final next = PayrollReadinessSelection
+                                            .toggleVisible(selectedIds, allIds,
+                                                value == true);
+                                        selectedIds
+                                          ..clear()
+                                          ..addAll(next);
+                                      });
+                                    },
+                            ),
+                            const Expanded(
+                                child: Text('Select all visible employees',
+                                    maxLines: 2,
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700))),
+                            Text('${selectedIds.length} selected',
+                                style: const TextStyle(fontSize: 11)),
+                            const SizedBox(width: 10),
+                          ],
+                        )),
+                    const Divider(),
+                    listArea(
+                      displayEmployees.isEmpty
+                          ? const Center(
+                              child: Text('No employees match this filter.'),
+                            )
+                          : ListView.separated(
+                              itemCount: displayEmployees.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                final employee = displayEmployees[index];
+                                final employeeId = _normalizeBranchValue(
+                                  employee['employee_id'],
+                                );
+                                final name =
+                                    (employee['name'] ?? employeeId).toString();
+                                final checked =
+                                    selectedIds.contains(employeeId);
+                                final missing =
+                                    missingDaysByEmployee[employeeId] ??
+                                        requiredDays.toList();
+                                final attendanceReady = missing.isEmpty;
+                                final attendanceExempt =
+                                    attendanceExemptIds.contains(employeeId);
+                                final attendanceExemptLabel = _attendanceBool(
+                                  employee['is_management_staff'],
+                                )
+                                    ? 'Management Staff'
+                                    : _attendanceBool(
+                                        employee['is_temp_staff'],
+                                      )
+                                        ? 'Temporary Staff'
+                                        : _attendanceBool(
+                                            employee['is_support_staff'],
+                                          )
+                                            ? 'Support Staff'
+                                            : 'Intern/Practical';
+
+                                final missingDatesExpanded =
+                                    expandedMissingIds.contains(employeeId);
+
+                                return InkWell(
+                                  onTap: attendanceReady
+                                      ? null
+                                      : () => setSelectionState(() {
+                                            if (missingDatesExpanded) {
+                                              expandedMissingIds
+                                                  .remove(employeeId);
+                                            } else {
+                                              expandedMissingIds
+                                                  .add(employeeId);
+                                            }
+                                          }),
+                                  child: CheckboxListTile(
+                                    dense: true,
+                                    visualDensity:
+                                        const VisualDensity(vertical: -2),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 3),
+                                    value: checked,
+                                    onChanged: !attendanceReady
+                                        ? null
+                                        : (value) {
+                                            setSelectionState(() {
+                                              if (value == true) {
+                                                selectedIds.add(employeeId);
+                                              } else {
+                                                selectedIds.remove(employeeId);
+                                              }
+                                            });
+                                          },
+                                    title: Row(children: [
+                                      Expanded(
+                                          child: Text(name,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Color(0xFF16325B)))),
+                                      if (attendanceExempt &&
+                                          !compactSelection) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 7, vertical: 3),
+                                            decoration: BoxDecoration(
+                                                color: _attendanceBool(employee[
+                                                        'is_management_staff'])
+                                                    ? const Color(0xFFEEE8FF)
+                                                    : const Color(0xFFE2F7E8),
+                                                borderRadius:
+                                                    BorderRadius.circular(10)),
+                                            child: Text(attendanceExemptLabel,
+                                                style: const TextStyle(
+                                                    fontSize: 9,
+                                                    color: Color(0xFF3E3B8B),
+                                                    fontWeight:
+                                                        FontWeight.w600)))
+                                      ],
+                                    ]),
+                                    subtitle: Text(
+                                      attendanceExempt
+                                          ? '$employeeId  •  Attendance not required${compactSelection ? ' ($attendanceExemptLabel)' : ''}'
+                                          : attendanceReady
+                                              ? '$employeeId • Attendance complete ($requiredDayCount/$requiredDayCount)'
+                                              : missingDatesExpanded
+                                                  ? '$employeeId • Missing ${missing.length} day(s): '
+                                                      '${missing.map((day) => day.toString().padLeft(2, '0')).join(', ')}'
+                                                  : '$employeeId • Missing ${missing.length} day(s) • Tap to view dates',
+                                      maxLines: missingDatesExpanded ? 4 : 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: attendanceReady
+                                            ? const Color(0xFF168653)
+                                            : const Color(0xFFC13B31),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    secondary: Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        EmployeePhoto(
+                                          name: name,
+                                          photoUrl:
+                                              employee['photo_url']?.toString(),
+                                          radius: 18,
+                                          borderColor: attendanceReady
+                                              ? const Color(0xFF168653)
+                                              : const Color(0xFFC13B31),
+                                        ),
+                                        Positioned(
+                                          right: -3,
+                                          bottom: -3,
+                                          child: Container(
+                                            width: 18,
+                                            height: 18,
+                                            decoration: BoxDecoration(
+                                              color: attendanceReady
+                                                  ? const Color(0xFF168653)
+                                                  : const Color(0xFFC13B31),
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                  color: Colors.white,
+                                                  width: 2),
+                                            ),
+                                            child: Icon(
+                                              attendanceReady
+                                                  ? Icons.check_rounded
+                                                  : Icons.priority_high_rounded,
+                                              color: Colors.white,
+                                              size: 11,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                    const Divider(),
+                    SwitchListTile(
+                      tileColor: const Color(0xFFF0F3FA),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      secondary: const CircleAvatar(
+                          backgroundColor: Color(0xFFE1E9FF),
+                          child: Icon(Icons.sync, color: Color(0xFF244C8B))),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 12),
+                      value: overwriteExisting,
+                      title: const Text('Replace existing payroll',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF143361))),
+                      subtitle: const Text(
+                        'Update the selected employee payroll if it already exists for this month.',
+                      ),
+                      onChanged: (value) {
+                        setSelectionState(() {
+                          overwriteExisting = value;
+                        });
+                      },
+                    ),
+                  ],
+                )),
+              ),
+              actionsAlignment: MainAxisAlignment.spaceBetween,
+              actions: [
+                Text(
+                    '${selectedIds.length} employee${selectedIds.length == 1 ? '' : 's'} selected',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, color: Color(0xFF143361))),
+                TextButton(
+                  onPressed: () => Navigator.of(selectionContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF082E64),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9))),
+                  onPressed: selectedIds.isEmpty
+                      ? null
+                      : () async {
+                          final ids = selectedIds.toList();
+                          final confirmed = await showDialog<bool>(
+                            context: selectionContext,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Confirm payroll generation'),
+                              content: Text(
+                                'Generate payroll for ${ids.length} employee(s) '
+                                'in $branchName for '
+                                '${DateFormat('MMMM yyyy').format(month)}?\n\n'
+                                '${overwriteExisting ? 'Existing payroll records for the selected employees will be replaced.' : 'Existing payroll records will be kept.'}',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  child: const Text('Review selection'),
+                                ),
+                                FilledButton.icon(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  icon: const Icon(Icons.calculate_outlined),
+                                  label: Text(
+                                    'Generate ${ids.length} payroll',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirmed != true || !selectionContext.mounted) {
+                            return;
+                          }
+                          Navigator.of(selectionContext).pop();
+                          closeBranchDialog?.call();
+                          await _generateSelectedPayroll(
+                            month: month,
+                            employeeIds: ids,
+                            overwriteExisting: overwriteExisting,
+                            branchName: branchName,
+                          );
+                        },
+                  icon: const Icon(Icons.calculate_outlined),
+                  label: const Text('Generate Payroll'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _generateSelectedPayroll({
+    required DateTime month,
+    required List<String> employeeIds,
+    required bool overwriteExisting,
+    required String branchName,
+  }) async {
+    if (employeeIds.isEmpty || !mounted) return;
+
+    selectedPayrollMonth = DateTime(month.year, month.month);
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text('Generating Payroll'),
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Text(
+                'Generating ${employeeIds.length} selected employee(s) for ${DateFormat('MMMM yyyy').format(month)}...',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final result = await AttendancePayrollService.generateMonthlyPayroll(
+        month: month,
+        employeeIds: employeeIds,
+        overwriteExisting: overwriteExisting,
+      );
+
+      // Show completion immediately. Refresh shared payroll state in the
+      // background instead of making the user wait for a second full fetch.
+      _invalidatePayrollReportCaches();
+      unawaited(service
+          .loadPayrollMonthFromSupabase(month)
+          .catchError((Object _) {}));
+
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      if (!mounted) return;
+
+      setState(() {});
+
+      await _showPayrollGenerationResult(
+        result,
+        branchName: branchName,
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        await showDialog<void>(
+          context: context,
+          builder: (errorContext) => AlertDialog(
+            title: const Text('Payroll generation failed'),
+            content: SelectableText(e.toString()),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(errorContext),
+                  child: const Text('Close'))
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showPayrollGenerationResult(
+    PayrollGenerationResult result, {
+    required String branchName,
+  }) async {
+    final missingContributions = result.generated
+        .where((item) =>
+            (item.epfEmployee == 0 && item.epfEmployer == 0) ||
+            (item.socsoEmployee == 0 && item.socsoEmployer == 0))
+        .toList()
+      ..sort((a, b) => a.employeeName.compareTo(b.employeeName));
+    String missingLabel(PayrollGenerationItem item) => [
+          if (item.epfEmployee == 0 && item.epfEmployer == 0) 'No EPF',
+          if (item.socsoEmployee == 0 && item.socsoEmployer == 0) 'No SOCSO',
+        ].join(' / ');
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Payroll Generation Complete'),
+          content: SizedBox(
+            width: 820,
+            height: 600,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  branchName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  DateFormat('MMMM yyyy').format(result.month),
+                  style: const TextStyle(color: Colors.black54),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 20,
+                  runSpacing: 8,
+                  children: [
+                    Text('Generated: ${result.generatedCount}'),
+                    Text('Skipped: ${result.skippedCount}'),
+                    Text(
+                      'Approved OT duration: ${result.totalOvertimeDuration.toStringAsFixed(2)}',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                const Divider(),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      Text(
+                          'No EPF / SOCSO: ${missingContributions.length} employee(s)',
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
+                      const Text(
+                          'Listed when either contribution has RM0 for both employee and employer.',
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.black54)),
+                      if (missingContributions.isEmpty)
+                        const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                                'All generated employees have EPF and SOCSO contributions.')),
+                      for (final item in missingContributions)
+                        ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.info_outline,
+                                color: Colors.orange),
+                            title: Text(
+                                '${item.employeeId} • ${item.employeeName}'),
+                            subtitle: Text('${missingLabel(item)}\n'
+                                'EPF: employee RM ${item.epfEmployee.toStringAsFixed(2)}, employer RM ${item.epfEmployer.toStringAsFixed(2)} • '
+                                'SOCSO: employee RM ${item.socsoEmployee.toStringAsFixed(2)}, employer RM ${item.socsoEmployer.toStringAsFixed(2)}')),
+                      const Divider(),
+                      const Text('Generated payroll',
+                          style: TextStyle(fontWeight: FontWeight.w800)),
+                      ...result.generated.map(
+                        (item) => ListTile(
+                          dense: true,
+                          leading: const Icon(
+                            Icons.check_circle,
+                            color: Colors.green,
+                          ),
+                          title: Text(
+                            item.employeeName.isEmpty
+                                ? item.employeeId
+                                : item.employeeName,
+                          ),
+                          subtitle: Text(
+                            '${item.employeeId} • '
+                            'Basic RM ${item.basicSalary.toStringAsFixed(2)} • '
+                            'FW RM ${item.fwSalary.toStringAsFixed(2)} • '
+                            'Kedatangan RM ${item.elaunKedatangan.toStringAsFixed(2)} • '
+                            'Perkhidmatan RM ${item.elaunPerkhidmatan.toStringAsFixed(2)} • '
+                            'Kerajinan RM ${item.elaunKerajinan.toStringAsFixed(2)} • '
+                            'Makanan RM ${item.elaunMakanan.toStringAsFixed(2)} • '
+                            'Approved OT ${item.overtimeDuration.toStringAsFixed(2)} hours / '
+                            'RM ${item.overtimeAmount.toStringAsFixed(2)} • '
+                            'Cuti Umum RM ${item.cutiUmum.toStringAsFixed(2)} • '
+                            'Zakat RM ${item.zakat.toStringAsFixed(2)} • '
+                            'Advance RM ${item.advance.toStringAsFixed(2)} • '
+                            'Unpaid ${item.unpaidDays} day(s) / '
+                            'RM ${item.unpaidDeduction.toStringAsFixed(2)}',
+                          ),
+                        ),
+                      ),
+                      ...result.skipped.map(
+                        (item) => ListTile(
+                          dense: true,
+                          leading: const Icon(
+                            Icons.error_outline,
+                            color: Colors.orange,
+                          ),
+                          title: Text(
+                            item.employeeName.isEmpty
+                                ? item.employeeId
+                                : item.employeeName,
+                          ),
+                          subtitle: Text(item.message),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _invalidatePayrollReportCaches() {
+    _employeeSalaryCache.clear();
+    _employeeSalaryCacheTime.clear();
+    _employeeRowsAt = null;
+    _adminEmployeesFuture = null;
+    _dashboardReportCache.clear();
+    _statutoryReportCache.clear();
+    _dashboardReportCacheTime.clear();
+    _statutoryReportCacheTime.clear();
+    _dashboardDataFuture = null;
+  }
+
+  String _branchIdFromMap(Map<String, dynamic> branch) {
+    return _normalizeBranchValue(
+      branch['id'] ?? branch['branch_id'],
+    );
+  }
+
+  String _branchNameFromMap(
+    Map<String, dynamic> branch,
+    String fallback,
+  ) {
+    final value = branch['name'] ??
+        branch['branch_name'] ??
+        branch['location'] ??
+        fallback;
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? fallback : text;
+  }
+
+  String _normalizeBranchValue(dynamic value) {
+    return value?.toString().trim().toUpperCase() ?? '';
+  }
+
+  /// Payroll exports follow the business roster order: management first, then
+  /// staff by joining date.  Missing/identical dates fall back to employee ID
+  /// so the output remains stable and predictable.
+  int _comparePayrollExportRecords(
+    Map<String, dynamic> a,
+    Map<String, dynamic> b,
+    Map<String, Map<String, dynamic>> employees,
+  ) {
+    final aId = _normalizeBranchValue(a['employee_id']);
+    final bId = _normalizeBranchValue(b['employee_id']);
+    final aEmployee = employees[aId] ?? const <String, dynamic>{};
+    final bEmployee = employees[bId] ?? const <String, dynamic>{};
+
+    bool isManagement(Map<String, dynamic> employee) {
+      final value = employee['is_management_staff'];
+      return value == true || value?.toString().trim().toLowerCase() == 'true';
+    }
+
+    final aManagement = isManagement(aEmployee);
+    final bManagement = isManagement(bEmployee);
+    if (aManagement != bManagement) return aManagement ? -1 : 1;
+
+    DateTime? joiningDate(Map<String, dynamic> employee) {
+      final text = (employee['joining_date'] ?? employee['joiningDate'] ?? '')
+          .toString()
+          .trim();
+      if (text.isEmpty) return null;
+      final isoDate = DateTime.tryParse(text);
+      if (isoDate != null) return isoDate;
+      try {
+        return DateFormat('dd/MM/yyyy').parseStrict(text);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final aJoiningDate = joiningDate(aEmployee);
+    final bJoiningDate = joiningDate(bEmployee);
+    if (aJoiningDate != null && bJoiningDate != null) {
+      final dateOrder = aJoiningDate.compareTo(bJoiningDate);
+      if (dateOrder != 0) return dateOrder;
+    } else if (aJoiningDate != null) {
+      return -1;
+    } else if (bJoiningDate != null) {
+      return 1;
+    }
+
+    return aId.compareTo(bId);
+  }
+
+  List<Map<String, dynamic>> _visibleMonthPayroll(
+    List<Map<String, dynamic>> records,
+    Iterable<Map<String, dynamic>> employees,
+    DateTime month,
+  ) {
+    final eligible = {
+      for (final employee in employees)
+        if (PayrollMonthScope.activeInMonth(employee, month))
+          _normalizeBranchValue(employee['employee_id']),
+    };
+    return records
+        .where((record) =>
+            eligible.contains(_normalizeBranchValue(record['employee_id'])) &&
+            _payrollPeriodMatchesMonth(record['period'], month))
+        .toList();
+  }
+
+  String _payrollBranchIdFromEmployee(Map<String, dynamic> employee) {
+    final payrollBranch = _normalizeBranchValue(employee['payroll_branch_id']);
+    return payrollBranch.isNotEmpty
+        ? payrollBranch
+        : _normalizeBranchValue(employee['branch_id']);
+  }
+
+// ============================================================================
+// EDIT PAYROLL
+// ============================================================================
+
+  Future<void> _showEditPayrollDialog() async {
+    final initialMonth =
+        DateTime(selectedPayrollMonth.year, selectedPayrollMonth.month);
+    List<Map<String, dynamic>> branches;
+    List<Map<String, dynamic>> employees;
+    List<Map<String, dynamic>> monthPayroll;
+    try {
+      final responses = await Future.wait([
+        SupabaseService.getBranches(),
+        SupabaseService.database
+            .from('employees')
+            .select()
+            .order('employee_id'),
+        SupabaseService.getPayrollForMonth(initialMonth),
+      ]);
+      branches = List<Map<String, dynamic>>.from(responses[0]);
+      employees = List<Map<String, dynamic>>.from(responses[1]);
+      monthPayroll = List<Map<String, dynamic>>.from(responses[2]);
+      employees.sort(
+        (a, b) => _normalizeBranchValue(a['employee_id'])
+            .compareTo(_normalizeBranchValue(b['employee_id'])),
+      );
+    } catch (e) {
+      if (mounted) _message('Unable to load employees: $e');
+      return;
+    }
+
+    if (!mounted) return;
+    if (employees.isEmpty) {
+      _message('No employees are available.');
+      return;
+    }
+
+    const fields = <(String, String, String)>[
+      ('basic_salary', 'Basic Salary', 'Earnings'),
+      ('fw_salary', 'FW Salary', 'Earnings'),
+      ('elaun_kedatangan', 'Elaun Kedatangan', 'Earnings'),
+      ('elaun_perkhidmatan', 'Elaun Perkhidmatan', 'Earnings'),
+      ('elaun_kerajinan', 'Elaun Kerajinan', 'Earnings'),
+      ('elaun_makanan', 'Elaun Makanan', 'Earnings'),
+      ('overtime', 'Overtime', 'Earnings'),
+      ('cuti_umum', 'Cuti Umum', 'Earnings'),
+      ('bonus', 'Bonus', 'Earnings'),
+      ('commission', 'Commission', 'Earnings'),
+      ('other_earnings', 'Other Earnings', 'Earnings'),
+      ('late_deduction', 'Late Deduction', 'Deductions'),
+      ('unpaid_deduction', 'Unpaid Deduction', 'Deductions'),
+      ('epf_employee', 'EPF Employee', 'Deductions'),
+      ('socso_employee', 'SOCSO Employee', 'Deductions'),
+      ('eis_employee', 'EIS Employee', 'Deductions'),
+      ('pcb', 'PCB', 'Deductions'),
+      ('zakat', 'Zakat', 'Deductions'),
+      ('advance', 'Advance', 'Deductions'),
+      ('epf_employer', 'EPF Employer', 'Employer Contributions'),
+      ('socso_employer', 'SOCSO Employer', 'Employer Contributions'),
+      ('eis_employer', 'EIS Employer', 'Employer Contributions'),
+    ];
+
+    const automaticContributionFields = {
+      'epf_employee',
+      'epf_employer',
+      'socso_employee',
+      'socso_employer',
+      'eis_employee',
+      'eis_employer',
+    };
+    const contributionBasisFields = {
+      'basic_salary',
+      'late_deduction',
+      'unpaid_deduction',
+    };
+
+    final controllers = <String, TextEditingController>{
+      for (final field in fields) field.$1: TextEditingController(text: '0.00'),
+    };
+    final remarksController = TextEditingController();
+    final branchNames = <String, String>{};
+    for (final branch in branches) {
+      final id = _branchIdFromMap(branch);
+      if (id.isNotEmpty) branchNames[id] = _branchNameFromMap(branch, id);
+    }
+    for (final employee in employees) {
+      final id = _payrollBranchIdFromEmployee(employee);
+      if (id.isNotEmpty) branchNames.putIfAbsent(id, () => id);
+    }
+    final branchIds = branchNames.keys.toList()
+      ..sort(
+        (a, b) => (branchNames[a] ?? a)
+            .toLowerCase()
+            .compareTo((branchNames[b] ?? b).toLowerCase()),
+      );
+
+    DateTime month = initialMonth;
+    String? branchId;
+    String? employeeId;
+    Map<String, dynamic>? storedRecord;
+    bool loading = false;
+    bool saving = false;
+    String? error;
+    String? success;
+    String? statutoryInfo;
+    bool calculatingStatutory = false;
+    int statutoryRevision = 0;
+    bool hasUnsavedChanges = false;
+    DateTime? lastSavedAt;
+
+    double number(String key) =>
+        double.tryParse(controllers[key]!.text.trim().replaceAll(',', '')) ?? 0;
+
+    void fillControllers(Map<String, dynamic>? record) {
+      for (final field in fields) {
+        final value = _payrollNumber(record?[field.$1]);
+        controllers[field.$1]!.text = value.toStringAsFixed(2);
+      }
+      remarksController.text = record?['remarks']?.toString() ?? '';
+    }
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> loadPayroll() async {
+              if (employeeId == null || loading || saving) return;
+              setDialogState(() {
+                loading = true;
+                error = null;
+                success = null;
+                statutoryInfo = null;
+                calculatingStatutory = false;
+                statutoryRevision++;
+                storedRecord = null;
+              });
+
+              try {
+                final start = DateTime(month.year, month.month);
+                final end = DateTime(month.year, month.month + 1);
+                final response = await SupabaseService.database
+                    .from('payroll')
+                    .select()
+                    .eq('employee_id', employeeId!)
+                    .gte('period', DateFormat('yyyy-MM-dd').format(start))
+                    .lt('period', DateFormat('yyyy-MM-dd').format(end))
+                    .order('period')
+                    .limit(1);
+                final rows = List<Map<String, dynamic>>.from(response);
+                storedRecord =
+                    rows.isEmpty ? null : Map<String, dynamic>.from(rows.first);
+                if (storedRecord == null) {
+                  error =
+                      'No saved payroll for this employee in the selected month.';
+                }
+                fillControllers(storedRecord);
+                hasUnsavedChanges = false;
+                lastSavedAt = DateTime.tryParse(
+                  storedRecord?['updated_at']?.toString() ?? '',
+                )?.toLocal();
+              } catch (e) {
+                error = 'Unable to load payroll: $e';
+                fillControllers(null);
+              }
+
+              if (dialogContext.mounted) {
+                setDialogState(() => loading = false);
+              }
+            }
+
+            Future<bool> confirmDiscardChanges() async {
+              if (!hasUnsavedChanges) return true;
+              final discard = await showDialog<bool>(
+                context: dialogContext,
+                builder: (context) => AlertDialog(
+                  title: const Text('Discard unsaved changes?'),
+                  content: const Text(
+                    'The payroll values you changed have not been saved.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Keep editing'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Discard changes'),
+                    ),
+                  ],
+                ),
+              );
+              return discard == true;
+            }
+
+            Future<void> chooseMonth() async {
+              if (!await confirmDiscardChanges()) return;
+              final picked = await showDatePicker(
+                context: dialogContext,
+                initialDate: month,
+                firstDate: DateTime(2020),
+                lastDate: DateTime(2100),
+                helpText: 'Select Payroll Month',
+              );
+              if (picked == null || !dialogContext.mounted) return;
+              setDialogState(() {
+                month = DateTime(picked.year, picked.month);
+                employeeId = null;
+                monthPayroll = [];
+                storedRecord = null;
+                loading = true;
+                hasUnsavedChanges = false;
+                error = null;
+                success = null;
+                statutoryInfo = null;
+                calculatingStatutory = false;
+                statutoryRevision++;
+                fillControllers(null);
+              });
+              try {
+                final records = await SupabaseService.getPayrollForMonth(month);
+                if (!dialogContext.mounted) return;
+                setDialogState(() => monthPayroll = records);
+              } catch (e) {
+                if (!dialogContext.mounted) return;
+                setDialogState(
+                    () => error = 'Unable to load payroll employees: $e');
+              } finally {
+                if (dialogContext.mounted)
+                  setDialogState(() => loading = false);
+              }
+            }
+
+            Future<void> savePayroll() async {
+              if (employeeId == null ||
+                  loading ||
+                  saving ||
+                  calculatingStatutory) {
+                return;
+              }
+              if (storedRecord == null) {
+                setDialogState(
+                    () => error = 'Select an existing payroll for this month.');
+                return;
+              }
+              for (final field in fields) {
+                final raw =
+                    controllers[field.$1]!.text.trim().replaceAll(',', '');
+                final value = double.tryParse(raw);
+                if (value == null || value < 0) {
+                  setDialogState(() {
+                    error = '${field.$2} must be a valid amount of 0 or more.';
+                  });
+                  return;
+                }
+              }
+
+              setDialogState(() {
+                saving = true;
+                error = null;
+                success = null;
+              });
+
+              try {
+                final payrollId = storedRecord!['id'];
+                if (payrollId == null || payrollId.toString().trim().isEmpty) {
+                  throw StateError(
+                      'Saved payroll ID is missing. Reload the payroll before saving.');
+                }
+                final employee = employees.firstWhere(
+                  (row) => row['employee_id']?.toString() == employeeId,
+                );
+                final now = DateTime.now().toIso8601String();
+                final locked = payrollIsLocked(storedRecord!);
+                final record = <String, dynamic>{
+                  if (storedRecord != null) ...storedRecord!,
+                  for (final field in fields) field.$1: number(field.$1),
+                  if (!locked) ...{
+                    'new_ic_no':
+                        storedRecord?['new_ic_no'] ?? employee['new_ic_no'],
+                    'bank_code':
+                        storedRecord?['bank_code'] ?? employee['bank_code'],
+                    'bank_account': storedRecord?['bank_account'] ??
+                        employee['bank_account'],
+                  },
+                  'remarks': remarksController.text.trim().isEmpty
+                      ? null
+                      : remarksController.text.trim(),
+                  'updated_at': now,
+                  if (!locked) ...{
+                    'is_published': false,
+                    'published_at': null,
+                    'published_by': null,
+                  },
+                };
+                record.remove('branch_id');
+                record.remove('branch_name');
+                final componentChanges = payrollEditUpdatePayload(
+                    storedRecord!, record,
+                    preserveUnsetZero: locked);
+                final affectsNet = fields.any((field) =>
+                    field.$3 != 'Employer Contributions' &&
+                    componentChanges.containsKey(field.$1));
+                if (!locked || affectsNet) {
+                  SavedPayrollAmounts.refreshExistingTotals(record);
+                }
+
+                final changes = payrollEditUpdatePayload(storedRecord!, record,
+                    preserveUnsetZero: locked);
+                final Map<String, dynamic> saved;
+                if (locked) {
+                  final adjustmentChanges = Map<String, dynamic>.from(changes)
+                    ..remove('updated_at');
+                  if (adjustmentChanges.isEmpty) {
+                    saved = Map<String, dynamic>.from(storedRecord!);
+                  } else {
+                    final reasonForm = GlobalKey<FormState>();
+                    var adjustmentReason = '';
+                    final reason = await showDialog<String>(
+                      context: dialogContext,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Authorize payroll adjustment'),
+                        content: Form(
+                            key: reasonForm,
+                            child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                      'Save ${adjustmentChanges.length} changed payroll field(s). Publication and payment status stay unchanged; the changes and reason are recorded.'),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                      initialValue: adjustmentReason,
+                                      maxLength: 1000,
+                                      onChanged: (value) =>
+                                          adjustmentReason = value,
+                                      validator: (value) => (value
+                                                      ?.trim()
+                                                      .length ??
+                                                  0) <
+                                              5
+                                          ? 'Enter a reason with at least 5 characters.'
+                                          : null,
+                                      decoration: const InputDecoration(
+                                          labelText:
+                                              'Adjustment reason (at least 5 characters)')),
+                                ])),
+                        actions: [
+                          TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Cancel')),
+                          FilledButton(
+                              onPressed: () {
+                                if (reasonForm.currentState!.validate()) {
+                                  Navigator.pop(
+                                      context, adjustmentReason.trim());
+                                }
+                              },
+                              child: const Text('Authorize adjustment')),
+                        ],
+                      ),
+                    );
+                    if (reason == null) {
+                      if (dialogContext.mounted) {
+                        setDialogState(() => saving = false);
+                      }
+                      return;
+                    }
+                    final result = await SupabaseService.database
+                        .rpc('adjust_payroll', params: {
+                      'p_payroll_id': payrollId.toString(),
+                      'p_changes': adjustmentChanges,
+                      'p_expected': Map<String, dynamic>.from(storedRecord!),
+                      'p_reason': reason,
+                    });
+                    saved = Map<String, dynamic>.from(result as Map);
+                  }
+                } else {
+                  saved = await SupabaseService.database
+                      .from('payroll')
+                      .update(changes)
+                      .eq('id', payrollId)
+                      .eq('employee_id', employeeId!)
+                      .select()
+                      .single();
+                }
+                _invalidatePayrollReportCaches();
+                unawaited(service
+                    .loadPayrollMonthFromSupabase(month)
+                    .catchError((Object _) {}));
+                selectedPayrollMonth = month;
+                if (!dialogContext.mounted) return;
+                setDialogState(() {
+                  storedRecord = Map<String, dynamic>.from(saved);
+                  fillControllers(storedRecord);
+                  saving = false;
+                  hasUnsavedChanges = false;
+                  lastSavedAt = DateTime.now();
+                  success =
+                      'Payroll saved for $employeeId - ${DateFormat('MMMM yyyy').format(month)}. You can select another employee or use Previous/Next.';
+                });
+                if (mounted) setState(() {});
+              } catch (e) {
+                if (dialogContext.mounted) {
+                  setDialogState(() {
+                    saving = false;
+                    error = 'Unable to save payroll: $e';
+                  });
+                }
+              }
+            }
+
+            final eligibleEmployees = PayrollMonthScope.employeesWithPayroll(
+              employees: employees,
+              payroll: monthPayroll,
+              month: month,
+            );
+            final filteredEmployees = branchId == null
+                ? <Map<String, dynamic>>[]
+                : eligibleEmployees
+                    .where(
+                      (employee) =>
+                          _payrollBranchIdFromEmployee(employee) == branchId,
+                    )
+                    .toList()
+              ..sort(
+                (a, b) => _normalizeBranchValue(a['employee_id'])
+                    .compareTo(_normalizeBranchValue(b['employee_id'])),
+              );
+            final selectedEmployeeIndex = employeeId == null
+                ? -1
+                : filteredEmployees.indexWhere(
+                    (employee) =>
+                        employee['employee_id']?.toString() == employeeId,
+                  );
+
+            Future<void> selectAdjacentEmployee(int direction) async {
+              if (!await confirmDiscardChanges()) return;
+              final nextIndex = selectedEmployeeIndex + direction;
+              if (nextIndex < 0 || nextIndex >= filteredEmployees.length) {
+                return;
+              }
+              setDialogState(() {
+                employeeId =
+                    filteredEmployees[nextIndex]['employee_id']?.toString();
+                storedRecord = null;
+                hasUnsavedChanges = false;
+                error = null;
+                success = null;
+                fillControllers(null);
+              });
+              await loadPayroll();
+            }
+
+            Future<void> recalculateStatutoryContributions() async {
+              final selectedId = employeeId;
+              if (selectedId == null) return;
+              final revision = ++statutoryRevision;
+              await Future<void>.delayed(const Duration(milliseconds: 300));
+              if (revision != statutoryRevision || !dialogContext.mounted) {
+                return;
+              }
+
+              setDialogState(() {
+                calculatingStatutory = true;
+                statutoryInfo = null;
+                error = null;
+                success = null;
+              });
+              try {
+                final unpaidDeduction = number('unpaid_deduction');
+                final result = await AttendancePayrollService
+                    .calculateStatutoryContributions(
+                  employeeId: selectedId,
+                  basicSalary: number('basic_salary'),
+                  unpaidDeduction: unpaidDeduction,
+                  lateDeduction: number('late_deduction'),
+                );
+                if (revision != statutoryRevision || !dialogContext.mounted) {
+                  return;
+                }
+                for (final key in automaticContributionFields) {
+                  controllers[key]!.text = result[key]!.toStringAsFixed(2);
+                }
+                setDialogState(() {
+                  calculatingStatutory = false;
+                  statutoryInfo = result['contributions_applicable'] == 0
+                      ? 'Standard EPF, SOCSO and EIS are RM0 because basic salary minus '
+                              'late and unpaid deductions is below RM500.' +
+                          (result['epf_employer_top_up']! > 0
+                              ? ' The monthly employer EPF addition of '
+                                  '${_money(result['epf_employer_top_up']!)} still applies.'
+                              : '')
+                      : 'EPF updated from wage '
+                              '${_money(result['epf_wage']!)}; SOCSO updated from '
+                              'wage ${_money(result['socso_wage']!)}; EIS updated '
+                              'from wage ${_money(result['statutory_wage']!)}.' +
+                          (result['epf_employer_top_up']! > 0
+                              ? ' Employer EPF includes the monthly addition of '
+                                  '${_money(result['epf_employer_top_up']!)}.'
+                              : '');
+                });
+              } catch (e) {
+                if (revision == statutoryRevision && dialogContext.mounted) {
+                  setDialogState(() {
+                    calculatingStatutory = false;
+                    error = 'Unable to calculate statutory contributions: $e';
+                  });
+                }
+              }
+            }
+
+            final draft = SavedPayrollAmounts.fromRow({
+              if (storedRecord != null) ...storedRecord!,
+              for (final field in fields) field.$1: number(field.$1),
+            }, preferStoredTotals: false);
+            final earnings = draft.gross;
+            final deductions = draft.deductions;
+            final net = draft.net;
+            final dialogWidth = (MediaQuery.sizeOf(dialogContext).width - 80)
+                .clamp(280.0, 1180.0)
+                .toDouble();
+
+            Widget amountField(
+              (String, String, String) field,
+              double width,
+            ) {
+              return SizedBox(
+                width: width,
+                child: TextField(
+                  controller: controllers[field.$1],
+                  enabled: employeeId != null && !loading && !saving,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF18365F),
+                      fontWeight: FontWeight.w600),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) {
+                    setDialogState(() {
+                      hasUnsavedChanges = true;
+                      success = null;
+                      if (field.$1 == 'socso_employee' ||
+                          field.$1 == 'eis_employee') {
+                        final employeeShare = double.tryParse(
+                          controllers[field.$1]!
+                              .text
+                              .trim()
+                              .replaceAll(',', ''),
+                        );
+                        if (employeeShare == null || employeeShare < 0) {
+                          statutoryInfo = '${field.$2} must be a valid amount.';
+                        } else {
+                          final contribution =
+                              field.$1 == 'socso_employee' ? 'socso' : 'eis';
+                          final employerShare = AttendancePayrollService
+                              .employerShareForEmployeeContribution(
+                            contribution: contribution,
+                            employeeShare: employeeShare,
+                          );
+                          if (employerShare == null) {
+                            statutoryInfo =
+                                'No ${contribution.toUpperCase()} table row '
+                                'matches employee share '
+                                '${_money(employeeShare)}.';
+                          } else {
+                            final employerKey = field.$1 == 'socso_employee'
+                                ? 'socso_employer'
+                                : 'eis_employer';
+                            controllers[employerKey]!.text =
+                                employerShare.toStringAsFixed(2);
+                            statutoryInfo =
+                                '${contribution.toUpperCase()} employer share '
+                                'updated from the contribution table.';
+                          }
+                        }
+                      } else if (automaticContributionFields
+                          .contains(field.$1)) {
+                        statutoryInfo =
+                            '${field.$2} manually overridden by admin.';
+                      }
+                    });
+                    if (contributionBasisFields.contains(field.$1)) {
+                      recalculateStatutoryContributions();
+                    }
+                  },
+                  decoration: InputDecoration(
+                    labelText: field.$2,
+                    prefixText: 'RM ',
+                    isDense: true,
+                    filled: true,
+                    fillColor: Colors.white,
+                    labelStyle:
+                        const TextStyle(fontSize: 12, color: Color(0xFF1A3458)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 13),
+                    prefixIcon: Icon(
+                        switch (field.$1) {
+                          'basic_salary' ||
+                          'fw_salary' =>
+                            Icons.payments_outlined,
+                          'overtime' || 'late_deduction' => Icons.schedule,
+                          'cuti_umum' => Icons.calendar_month_outlined,
+                          'bonus' => Icons.card_giftcard,
+                          'elaun_makanan' => Icons.restaurant_outlined,
+                          'unpaid_deduction' => Icons.remove_circle_outline,
+                          'zakat' => Icons.volunteer_activism_outlined,
+                          'advance' => Icons.handshake_outlined,
+                          _ => Icons.account_balance_outlined,
+                        },
+                        size: 18,
+                        color: const Color(0xFF9C6A21)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(9),
+                        borderSide: const BorderSide(color: Color(0xFFD4D9E5))),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(9),
+                        borderSide: const BorderSide(color: Color(0xFFD4D9E5))),
+                  ),
+                ),
+              );
+            }
+
+            Widget fieldGroup(String title) {
+              final groupFields =
+                  fields.where((field) => field.$3 == title).toList();
+              return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFFFFEFC),
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(color: const Color(0xFFE0E3EC))),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                            width: double.infinity,
+                            color: const Color(0xFF06366F),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            child: Row(children: [
+                              Icon(
+                                  title == 'Earnings'
+                                      ? Icons.payments_outlined
+                                      : title == 'Deductions'
+                                          ? Icons.shield_outlined
+                                          : Icons.business_outlined,
+                                  color: const Color(0xFFFFC247),
+                                  size: 20),
+                              const SizedBox(width: 10),
+                              Text(title,
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700))
+                            ])),
+                        Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: LayoutBuilder(builder: (_, box) {
+                              final columns = box.maxWidth >= 600
+                                  ? 3
+                                  : box.maxWidth >= 380
+                                      ? 2
+                                      : 1;
+                              final fieldWidth =
+                                  (box.maxWidth - (columns - 1) * 12) / columns;
+                              return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (title == 'Deductions') ...[
+                                      const Text(
+                                          'EPF, SOCSO and EIS are calculated automatically and remain editable.',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              color: Color(0xFF65738A))),
+                                      const SizedBox(height: 12)
+                                    ],
+                                    Wrap(
+                                        spacing: 12,
+                                        runSpacing: 12,
+                                        children: groupFields
+                                            .map((field) =>
+                                                amountField(field, fieldWidth))
+                                            .toList()),
+                                  ]);
+                            })),
+                      ]));
+            }
+
+            return PopScope(
+              canPop: !saving && !hasUnsavedChanges,
+              onPopInvokedWithResult: (didPop, result) async {
+                if (didPop || saving) return;
+                if (await confirmDiscardChanges() && dialogContext.mounted) {
+                  setDialogState(() => hasUnsavedChanges = false);
+                  Navigator.pop(dialogContext);
+                }
+              },
+              child: AlertDialog(
+                backgroundColor: const Color(0xFFFFFCF7),
+                surfaceTintColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
+                title: Row(children: [
+                  Container(
+                      padding: const EdgeInsets.all(9),
+                      decoration: BoxDecoration(
+                          color: const Color(0xFFFFEDC9),
+                          borderRadius: BorderRadius.circular(9)),
+                      child: const Icon(Icons.edit_note_outlined,
+                          color: Color(0xFF98651D))),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                      child: Text('Edit Payroll',
+                          style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF142C4B)))),
+                  Image.asset('assets/hasani_books_logo.jpg',
+                      width: dialogWidth < 600 ? 90 : 130,
+                      height: 40,
+                      fit: BoxFit.contain),
+                ]),
+                content: SizedBox(
+                  width: dialogWidth,
+                  height: (MediaQuery.sizeOf(dialogContext).height * .70)
+                      .clamp(360.0, 760.0)
+                      .toDouble(),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Choose a branch, payroll month, and employee. Update earnings and deductions, then save the payroll.',
+                        ),
+                        const SizedBox(height: 18),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 280,
+                              child: DropdownButtonFormField<String>(
+                                initialValue: branchId,
+                                isExpanded: true,
+                                decoration: const InputDecoration(
+                                  labelText: 'Branch',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: branchIds
+                                    .map(
+                                      (id) => DropdownMenuItem(
+                                        value: id,
+                                        child: Text(branchNames[id] ?? id),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: loading || saving
+                                    ? null
+                                    : (value) async {
+                                        if (!await confirmDiscardChanges())
+                                          return;
+                                        if (!dialogContext.mounted) return;
+                                        setDialogState(() {
+                                          branchId = value;
+                                          employeeId = null;
+                                          storedRecord = null;
+                                          hasUnsavedChanges = false;
+                                          error = null;
+                                          success = null;
+                                          statutoryInfo = null;
+                                          calculatingStatutory = false;
+                                          statutoryRevision++;
+                                          fillControllers(null);
+                                        });
+                                      },
+                              ),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: loading || saving ? null : chooseMonth,
+                              icon: const Icon(Icons.calendar_month_outlined),
+                              label:
+                                  Text(DateFormat('MMMM yyyy').format(month)),
+                            ),
+                            SizedBox(
+                              width: 360,
+                              child: DropdownButtonFormField<String>(
+                                key: ValueKey('$branchId-$employeeId'),
+                                initialValue: employeeId,
+                                isExpanded: true,
+                                decoration: InputDecoration(
+                                  labelText: selectedEmployeeIndex < 0
+                                      ? 'Employee (ID A-Z)'
+                                      : 'Employee ${selectedEmployeeIndex + 1} of ${filteredEmployees.length}',
+                                  helperText: branchId != null &&
+                                          !loading &&
+                                          filteredEmployees.isEmpty
+                                      ? 'No eligible employees have payroll for this month.'
+                                      : null,
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: filteredEmployees.map((employee) {
+                                  final id =
+                                      employee['employee_id']?.toString() ?? '';
+                                  final name =
+                                      employee['name']?.toString().trim() ?? '';
+                                  return DropdownMenuItem(
+                                    value: id,
+                                    child:
+                                        Text(name.isEmpty ? id : '$id • $name'),
+                                  );
+                                }).toList(),
+                                onChanged: loading || saving
+                                    ? null
+                                    : (value) async {
+                                        if (!await confirmDiscardChanges())
+                                          return;
+                                        if (!dialogContext.mounted) return;
+                                        setDialogState(() {
+                                          employeeId = value;
+                                          storedRecord = null;
+                                          hasUnsavedChanges = false;
+                                          error = null;
+                                          success = null;
+                                          statutoryInfo = null;
+                                          calculatingStatutory = false;
+                                          statutoryRevision++;
+                                          fillControllers(null);
+                                        });
+                                        loadPayroll();
+                                      },
+                              ),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: loading ||
+                                      saving ||
+                                      selectedEmployeeIndex <= 0
+                                  ? null
+                                  : () => selectAdjacentEmployee(-1),
+                              icon: const Icon(Icons.chevron_left),
+                              label: const Text('Previous'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: loading ||
+                                      saving ||
+                                      selectedEmployeeIndex < 0 ||
+                                      selectedEmployeeIndex >=
+                                          filteredEmployees.length - 1
+                                  ? null
+                                  : () => selectAdjacentEmployee(1),
+                              icon: const Icon(Icons.chevron_right),
+                              label: const Text('Next'),
+                            ),
+                            if (loading) const CircularProgressIndicator(),
+                          ],
+                        ),
+                        if (employeeId != null && !loading) ...[
+                          const SizedBox(height: 18),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: storedRecord == null
+                                  ? Colors.amber.shade50
+                                  : Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  storedRecord == null
+                                      ? Icons.add_circle_outline
+                                      : Icons.cloud_done_outlined,
+                                  size: 19,
+                                ),
+                                const SizedBox(width: 9),
+                                Expanded(
+                                  child: Text(
+                                    storedRecord == null
+                                        ? 'No payroll exists for this month. Saving will create it.'
+                                        : lastSavedAt == null
+                                            ? 'Existing payroll loaded from the database.'
+                                            : 'Saved ${DateFormat('dd MMM yyyy, hh:mm a').format(lastSavedAt!)}.',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (calculatingStatutory ||
+                              statutoryInfo != null) ...[
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                if (calculatingStatutory) ...[
+                                  const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    calculatingStatutory
+                                        ? 'Checking EPF, SOCSO and EIS tables...'
+                                        : statutoryInfo!,
+                                    style: TextStyle(
+                                      color: Colors.blue.shade800,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                          LayoutBuilder(builder: (_, box) {
+                            final summary = PayrollEditorSummary(
+                                earnings: earnings,
+                                deductions: deductions,
+                                net: net);
+                            return box.maxWidth >= 900
+                                ? Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                        Expanded(child: fieldGroup('Earnings')),
+                                        const SizedBox(width: 14),
+                                        SizedBox(width: 285, child: summary)
+                                      ])
+                                : Column(children: [
+                                    fieldGroup('Earnings'),
+                                    summary,
+                                    const SizedBox(height: 12)
+                                  ]);
+                          }),
+                          fieldGroup('Deductions'),
+                          fieldGroup('Employer Contributions'),
+                          TextField(
+                            controller: remarksController,
+                            enabled: !saving,
+                            maxLines: 2,
+                            onChanged: (_) => setDialogState(() {
+                              hasUnsavedChanges = true;
+                              success = null;
+                            }),
+                            decoration: const InputDecoration(
+                              labelText: 'Remarks',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
+                        if (success != null) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.green.shade200),
+                            ),
+                            child: Text(
+                              success!,
+                              style: TextStyle(
+                                color: Colors.green.shade800,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (error != null) ...[
+                          const SizedBox(height: 14),
+                          Text(
+                            error!,
+                            style: TextStyle(
+                              color: Colors.red.shade700,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
+                actionsAlignment: MainAxisAlignment.spaceBetween,
+                actions: [
+                  OutlinedButton.icon(
+                      onPressed: loading || saving || employeeId == null
+                          ? null
+                          : () async {
+                              if (!await confirmDiscardChanges() ||
+                                  !dialogContext.mounted) return;
+                              setDialogState(() {
+                                statutoryRevision++;
+                                calculatingStatutory = false;
+                                fillControllers(storedRecord);
+                                hasUnsavedChanges = false;
+                                statutoryInfo = null;
+                                success = null;
+                                error = null;
+                              });
+                            },
+                      style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF98651D),
+                          side: const BorderSide(color: Color(0xFFBD8F3C))),
+                      icon: const Icon(Icons.restart_alt),
+                      label: const Text('Reset')),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    TextButton(
+                      onPressed: saving
+                          ? null
+                          : () async {
+                              if (await confirmDiscardChanges() &&
+                                  dialogContext.mounted) {
+                                setDialogState(() => hasUnsavedChanges = false);
+                                Navigator.pop(dialogContext);
+                              }
+                            },
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF07356E),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10))),
+                      onPressed: employeeId == null ||
+                              loading ||
+                              saving ||
+                              calculatingStatutory
+                          ? null
+                          : savePayroll,
+                      icon: saving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_outlined),
+                      label: Text(saving ? 'Saving...' : 'Save Payroll'),
+                    ),
+                  ]),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    } finally {
+      for (final controller in controllers.values) {
+        controller.dispose();
+      }
+      remarksController.dispose();
+    }
+  }
+// ============================================================================
+// EMPLOYEE PAYSLIPS
+// ============================================================================
+
+  Future<void> _publishEmployeePayslip(PayrollRecord record) async {
+    try {
+      final now = DateTime.now().toUtc().toIso8601String();
+      await SupabaseService.database.from('payroll').update({
+        'is_published': true,
+        'release_at': now,
+        'published_at': now,
+        'published_by': service.currentUser?.username,
+        'updated_at': now,
+      }).eq('id', record.id);
+      await service.loadPayrollMonthFromSupabase(record.period);
+      if (!mounted) return;
+      setState(() {});
+      _message(
+        '${DateFormat('MMMM yyyy').format(record.period)} payslip published '
+        'and released to the employee. Notification saved to their inbox.',
+      );
+    } catch (error) {
+      if (mounted) _message('Unable to publish payslip: $error');
+    }
+  }
+
+  DateTime? _payslipDirectoryPeriod;
+  String? _payslipDirectoryBranch;
+  String _payslipDirectoryTab = 'list';
+  bool _payslipDirectoryExporting = false;
+
+  Future<void> _viewPayslipDirectoryEmployee(Employee employee) async {
+    try {
+      final row = await SupabaseService.database
+          .from('employees')
+          .select()
+          .eq('employee_id', employee.employeeId)
+          .maybeSingle();
+      if (row != null && mounted)
+        _showSupabaseEmployee(Map<String, dynamic>.from(row));
+    } catch (error) {
+      if (mounted) _message('Unable to open employee: $error');
+    }
+  }
+
+  Future<void> _exportPayslipDirectory(
+      String format,
+      List<Employee> employees,
+      DateTime period,
+      Map<String, List<PayrollRecord>> byEmployee,
+      Employee? selectedEmployee,
+      int? activeYear) async {
+    if (_payslipDirectoryExporting) return;
+    setState(() => _payslipDirectoryExporting = true);
+    try {
+      List<String> headers;
+      List<List<dynamic>> rows;
+      final tab = _payslipDirectoryTab;
+      if (tab == 'history' && selectedEmployee == null) {
+        _message('Choose an employee to export payslip history.');
+        return;
+      }
+      if (tab == 'history' && selectedEmployee != null) {
+        headers = [
+          'Employee ID',
+          'Employee Name',
+          'Payroll Month',
+          'Earnings RM',
+          'Deductions RM',
+          'Net RM'
+        ];
+        rows =
+            (byEmployee[selectedEmployee.employeeId.trim().toUpperCase()] ?? [])
+                .where((p) => p.period.year == activeYear)
+                .map((p) => <dynamic>[
+                      selectedEmployee.employeeId,
+                      selectedEmployee.name,
+                      DateFormat('MMM yyyy').format(p.period),
+                      p.totalEarnings,
+                      p.totalDeductions,
+                      p.netPay
+                    ])
+                .toList();
+      } else if (tab == 'summary') {
+        headers = [
+          'Employee ID',
+          'Employee Name',
+          'Branch',
+          'Payroll Month',
+          'Earnings RM',
+          'Deductions RM',
+          'Net RM'
+        ];
+        rows = [
+          for (final e in employees)
+            for (final p in byEmployee[e.employeeId.trim().toUpperCase()] ??
+                <PayrollRecord>[])
+              if (p.period.year == period.year &&
+                  p.period.month == period.month)
+                <dynamic>[
+                  e.employeeId,
+                  e.name,
+                  e.branchId,
+                  DateFormat('MMM yyyy').format(period),
+                  p.totalEarnings,
+                  p.totalDeductions,
+                  p.netPay
+                ]
+        ];
+      } else {
+        headers = [
+          'Employee ID',
+          'Employee Name',
+          'Branch',
+          'Status',
+          'Total Payslips (selected month)'
+        ];
+        rows = employees
+            .map((e) => <dynamic>[
+                  e.employeeId,
+                  e.name,
+                  e.branchId,
+                  PayrollMonthScope.activeInMonth(e.toJson(), period)
+                      ? 'Active'
+                      : 'Inactive',
+                  byEmployee[e.employeeId.trim().toUpperCase()]?.length ?? 0
+                ])
+            .toList();
+      }
+      if (rows.isEmpty) {
+        _message('No payslips or employees match these filters.');
+        return;
+      }
+      final title = tab == 'history'
+          ? 'Payslip History - $activeYear - ${selectedEmployee!.name}'
+          : tab == 'summary'
+              ? 'Payslip Summary - ${DateFormat('MMM yyyy').format(period)}'
+              : 'Employee Payslips - ${DateFormat('MMM yyyy').format(period)}';
+      final name =
+          'Employee_Payslips_${DateFormat('yyyy_MM').format(period)}_$tab';
+      if (format == 'xlsx') {
+        final book = xls.Excel.createExcel();
+        final defaultSheet = book.getDefaultSheet();
+        if (defaultSheet != null) book.rename(defaultSheet, 'Payslips');
+        final sheet = book['Payslips'];
+        final values = <List<dynamic>>[headers, ...rows];
+        for (var r = 0; r < values.length; r++) {
+          for (var c = 0; c < values[r].length; c++) {
+            final cell = sheet.cell(
+                xls.CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r));
+            final value = values[r][c];
+            cell.value = value is num
+                ? xls.DoubleCellValue(value.toDouble())
+                : xls.TextCellValue('$value');
+            if (r == 0) cell.cellStyle = _excelHeaderStyle(cell.cellStyle);
+          }
+        }
+        final bytes = book.encode();
+        if (bytes == null) throw StateError('Excel generation failed.');
+        await FileSaver.instance.saveFile(
+            name: name,
+            bytes: Uint8List.fromList(bytes),
+            ext: 'xlsx',
+            mimeType: MimeType.microsoftExcel);
+      } else {
+        final data = await rootBundle.load('assets/hasani_books_logo.jpg');
+        final logo = pw.MemoryImage(
+            data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
+        final doc = pw.Document();
+        doc.addPage(pw.MultiPage(
+            pageFormat: PdfPageFormat.a4.landscape,
+            header: (_) => pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Image(logo,
+                          width: 100, height: 35, fit: pw.BoxFit.contain),
+                      pw.Text(title,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold, fontSize: 12))
+                    ]),
+            build: (_) => [
+                  pw.SizedBox(height: 12),
+                  pw.TableHelper.fromTextArray(
+                      headers: headers,
+                      data: rows,
+                      headerStyle: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white),
+                      headerDecoration: const pw.BoxDecoration(
+                          color: PdfColor.fromInt(0xFF11345F)),
+                      cellStyle: const pw.TextStyle(fontSize: 8),
+                      cellAlignment: pw.Alignment.centerLeft)
+                ],
+            footer: (context) => pw.Text(
+                '${context.pageNumber} / ${context.pagesCount}',
+                style: const pw.TextStyle(fontSize: 8))));
+        final bytes = await doc.save();
+        await FileSaver.instance.saveFile(
+            name: name, bytes: bytes, ext: 'pdf', mimeType: MimeType.pdf);
+      }
+    } catch (error) {
+      if (mounted) _message('Unable to export payslip report: $error');
+    } finally {
+      if (mounted) setState(() => _payslipDirectoryExporting = false);
+    }
+  }
+
+  Widget _employeePayslipsPage() {
+    final period = _payslipDirectoryPeriod ?? selectedPayrollMonth;
+    final monthlyPayrollIds = service.payroll
+        .where((record) =>
+            record.period.year == period.year &&
+            record.period.month == period.month)
+        .map((record) => record.employeeId.trim().toUpperCase())
+        .toSet();
+    final employees = service.allEmployees
+        .where((employee) =>
+            monthlyPayrollIds
+                .contains(employee.employeeId.trim().toUpperCase()) &&
+            PayrollMonthScope.activeInMonth(employee.toJson(), period))
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final query = _payslipEmployeeSearch.trim().toLowerCase();
+    final byEmployee = <String, List<PayrollRecord>>{};
+    final allowedIds =
+        employees.map((e) => e.employeeId.trim().toUpperCase()).toSet();
+    for (final record in service.payroll) {
+      final id = record.employeeId.trim().toUpperCase();
+      if (allowedIds.contains(id) &&
+          record.period.year == period.year &&
+          record.period.month == period.month)
+        byEmployee.putIfAbsent(id, () => []).add(record);
+    }
+    for (final rows in byEmployee.values) {
+      rows.sort((a, b) => b.period.compareTo(a.period));
+    }
+    final branchNames = <String, String>{
+      for (final e in employees)
+        if (e.branchId.trim().isNotEmpty)
+          e.branchId: service.branchById(e.branchId)?.branchName ?? e.branchId
+    };
+    final filteredEmployees = employees
+        .where((e) =>
+            (_payslipShowActiveEmployees == null ||
+                PayrollMonthScope.activeInMonth(e.toJson(), period) ==
+                    _payslipShowActiveEmployees) &&
+            (_payslipDirectoryBranch == null ||
+                e.branchId == _payslipDirectoryBranch) &&
+            (query.isEmpty ||
+                '${e.name} ${e.employeeId} ${e.newIcNo} ${e.department} ${e.branchId}'
+                    .toLowerCase()
+                    .contains(query)))
+        .toList();
+    final selectedEmployee = selectedPayslipEmployeeId == null
+        ? null
+        : filteredEmployees
+            .where(
+                (employee) => employee.employeeId == selectedPayslipEmployeeId)
+            .firstOrNull;
+    final employeePayroll = selectedEmployee == null
+        ? <PayrollRecord>[]
+        : service.employeePayroll(selectedEmployee.employeeId);
+    final recordsByYear = <int, List<PayrollRecord>>{};
+    for (final record in employeePayroll) {
+      recordsByYear.putIfAbsent(record.period.year, () => []).add(record);
+    }
+    final years = recordsByYear.keys.toList()..sort((a, b) => b.compareTo(a));
+    final activeYear = years.contains(selectedEmployeePayslipYear)
+        ? selectedEmployeePayslipYear
+        : (years.isEmpty ? null : years.first);
+    final history = selectedEmployee == null
+        ? null
+        : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _adminPayslipEmployeeHeader(selectedEmployee, employeePayroll),
+            const SizedBox(height: 16),
+            if (years.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40),
+                  child: Text('No payroll records found for this employee.'),
+                ),
+              )
+            else ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: years.map((year) {
+                  final selected = year == activeYear;
+                  return ChoiceChip(
+                    avatar: Icon(
+                      Icons.calendar_month_outlined,
+                      size: 18,
+                      color: selected ? Colors.white : _midnight,
+                    ),
+                    label: Text('$year'),
+                    selected: selected,
+                    showCheckmark: false,
+                    selectedColor: _midnight,
+                    backgroundColor: Colors.white,
+                    side: const BorderSide(color: _champagne),
+                    labelStyle: TextStyle(
+                      color: selected ? Colors.white : _midnight,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    onSelected: (_) => setState(() {
+                      selectedEmployeePayslipYear = year;
+                      _payslipDirectoryPeriod = DateTime(year, period.month);
+                      selectedPayslipEmployeeId = null;
+                    }),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+              if (activeYear != null)
+                _adminPayslipYear(
+                  selectedEmployee,
+                  activeYear,
+                  recordsByYear[activeYear]!,
+                ),
+            ],
+          ]);
+    return ColoredBox(
+        color: const Color(0xFFFFFCF8),
+        child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: EmployeePayslipDirectory(
+              employees: filteredEmployees,
+              records: byEmployee,
+              totalEmployees: employees.length,
+              activeEmployees: employees.length,
+              totalPayslips: byEmployee.values
+                  .fold<int>(0, (sum, rows) => sum + rows.length),
+              period: period,
+              branches: branchNames,
+              branch: _payslipDirectoryBranch,
+              active: _payslipShowActiveEmployees,
+              searchController: _payslipEmployeeSearchController,
+              tab: _payslipDirectoryTab,
+              history: history,
+              annualSummary: EmployeeAnnualPayslipSummary(
+                loadWelfare: service.loadEmployeeWelfare,
+                importWelfare: service.importEmployeeWelfare,
+                employees: service.allEmployees,
+                records: service.payroll,
+                onRefresh: () async {
+                  try {
+                    await service.loadEmployeesFromSupabase();
+                    await service.loadPayrollFromSupabase();
+                    if (mounted) setState(() {});
+                  } catch (error) {
+                    if (mounted) {
+                      _message('Unable to refresh annual summary: $error');
+                    }
+                  }
+                },
+              ),
+              exporting: _payslipDirectoryExporting,
+              onPeriod: (value) => setState(() {
+                _payslipDirectoryPeriod = value;
+                selectedPayslipEmployeeId = null;
+                selectedEmployeePayslipYear = value.year;
+              }),
+              onBranch: (value) => setState(() {
+                _payslipDirectoryBranch = value;
+                selectedPayslipEmployeeId = null;
+              }),
+              onActive: (value) => setState(() {
+                _payslipShowActiveEmployees = value;
+                selectedPayslipEmployeeId = null;
+              }),
+              onSearch: (value) => setState(() {
+                _payslipEmployeeSearch = value;
+                selectedPayslipEmployeeId = null;
+              }),
+              onTab: (value) => setState(() => _payslipDirectoryTab = value),
+              onView: _viewPayslipDirectoryEmployee,
+              onPayslips: (employee) => setState(() {
+                selectedPayslipEmployeeId = employee.employeeId;
+                selectedEmployeePayslipYear = null;
+                _payslipDirectoryTab = 'history';
+              }),
+              onRefresh: () async {
+                await service.loadEmployeesFromSupabase();
+                await service.loadPayrollFromSupabase();
+                if (mounted) setState(() {});
+              },
+              onExport: (format) => _exportPayslipDirectory(
+                  format,
+                  filteredEmployees,
+                  period,
+                  _payslipDirectoryTab == 'history'
+                      ? {
+                          if (selectedEmployee != null)
+                            selectedEmployee.employeeId.trim().toUpperCase():
+                                employeePayroll
+                        }
+                      : byEmployee,
+                  selectedEmployee,
+                  activeYear),
+            )));
+  }
+
+  Widget _adminPayslipEmployeeHeader(
+    Employee employee,
+    List<PayrollRecord> records,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F7FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _champagne),
+      ),
+      child: Row(
+        children: [
+          EmployeePhoto(
+            name: employee.name,
+            photoUrl: employee.photoUrl,
+            radius: 30,
+            borderColor: _midnight,
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(employee.name,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w800)),
+                Text(
+                  '${employee.employeeId} • ${employee.department} • ${employee.branchId}',
+                  style: const TextStyle(color: Colors.black54),
+                ),
+                Text(
+                  '${records.length} payroll records',
+                  style: const TextStyle(
+                    color: _midnight,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => setState(() {
+              selectedPayslipEmployeeId = null;
+              selectedEmployeePayslipYear = null;
+            }),
+            icon: const Icon(Icons.swap_horiz),
+            label: const Text('Change Employee'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _adminPayslipYear(
+    Employee employee,
+    int year,
+    List<PayrollRecord> records,
+  ) {
+    final byMonth = <int, PayrollRecord>{
+      for (final record in records) record.period.month: record,
+    };
+    final gross = records.fold<double>(
+        0, (total, record) => total + record.totalEarnings);
+    final deduction = records.fold<double>(
+        0, (total, record) => total + record.totalDeductions);
+    final net =
+        records.fold<double>(0, (total, record) => total + record.netPay);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .78),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.calendar_month_outlined, color: _champagne),
+              const SizedBox(width: 8),
+              Text('$year',
+                  style: const TextStyle(
+                      fontSize: 21, fontWeight: FontWeight.w900)),
+              const Spacer(),
+              Text('${records.length} payslips',
+                  style: const TextStyle(color: Colors.black54)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _adminPayslipTotal('Gross', gross, _midnight),
+              _adminPayslipTotal('Deduction', deduction, _champagne),
+              _adminPayslipTotal('Net', net, const Color(0xFF07833D)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 1000
+                  ? 6
+                  : constraints.maxWidth >= 620
+                      ? 4
+                      : 2;
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: 12,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  mainAxisExtent: 106,
+                ),
+                itemBuilder: (context, index) {
+                  final month = index + 1;
+                  final record = byMonth[month];
+                  final available = record != null;
+                  return InkWell(
+                    onTap: available
+                        ? () => _viewAdminPayslip(employee, record)
+                        : null,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: available
+                            ? _midnight.withValues(alpha: .07)
+                            : Colors.grey.withValues(alpha: .05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: available
+                              ? _champagne.withValues(alpha: .35)
+                              : Colors.black12,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.description_outlined,
+                                size: 18,
+                                color: available ? _midnight : Colors.grey,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  DateFormat('MMMM')
+                                      .format(DateTime(year, month)),
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+                          Text(
+                            available
+                                ? 'RM ${NumberFormat('#,##0.00').format(record.netPay)}'
+                                : 'No payslip',
+                            style: TextStyle(
+                              color: available
+                                  ? const Color(0xFF07833D)
+                                  : Colors.grey,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          if (available)
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Text(
+                                  record.isPublished ? 'Published' : 'Draft',
+                                  style: TextStyle(
+                                    color: record.isPublished
+                                        ? const Color(0xFF07833D)
+                                        : const Color(0xFFB26700),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const Spacer(),
+                                if (!record.isPublished)
+                                  IconButton(
+                                    tooltip: 'Publish payslip to employee',
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 28,
+                                      minHeight: 28,
+                                    ),
+                                    onPressed: () =>
+                                        _publishEmployeePayslip(record),
+                                    icon: const Icon(
+                                      Icons.publish_outlined,
+                                      size: 18,
+                                    ),
+                                  ),
+                                const Icon(Icons.download_outlined, size: 17),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _adminPayslipTotal(String label, double value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        '$label  RM ${NumberFormat('#,##0.00').format(value)}',
+        style: TextStyle(color: color, fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+
+  Widget _legacyEmployeePayslipsPage() {
+    final mobileControlWidth =
+        (MediaQuery.sizeOf(context).width - 80).clamp(220.0, 420.0);
+    final availableMonths = service.payroll
+        .map((record) => DateTime(record.period.year, record.period.month))
+        .toSet()
+        .toList()
+      ..sort((a, b) => b.compareTo(a));
+    if (availableMonths.isNotEmpty &&
+        !availableMonths.any((month) =>
+            month.year == selectedPayslipMonth.year &&
+            month.month == selectedPayslipMonth.month)) {
+      selectedPayslipMonth = availableMonths.first;
+    }
+
+    final monthRecords = service.payroll
+        .where((record) =>
+            record.period.year == selectedPayslipMonth.year &&
+            record.period.month == selectedPayslipMonth.month)
+        .toList();
+    final employees = monthRecords
+        .map((record) => service.findEmployee(record.employeeId))
+        .whereType<Employee>()
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final employeeIds =
+        employees.map((employee) => employee.employeeId).toSet();
+    final effectiveEmployeeId = employeeIds.contains(selectedPayslipEmployeeId)
+        ? selectedPayslipEmployeeId
+        : null;
+    final selectedEmployee = effectiveEmployeeId == null
+        ? null
+        : service.findEmployee(effectiveEmployeeId);
+    PayrollRecord? selectedRecord;
+    if (effectiveEmployeeId != null) {
+      for (final record in monthRecords) {
+        if (record.employeeId.trim().toLowerCase() ==
+            effectiveEmployeeId.trim().toLowerCase()) {
+          selectedRecord = record;
+          break;
+        }
+      }
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Employee Payslips',
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          const Text(
+            'Select a payroll month and employee to view the official payslip.',
+            style: TextStyle(color: Colors.black54),
+          ),
+          const SizedBox(height: 22),
+          _panel(
+            'Payslip Viewer',
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 14,
+                  runSpacing: 14,
+                  crossAxisAlignment: WrapCrossAlignment.end,
+                  children: [
+                    SizedBox(
+                      width: mobileControlWidth.clamp(220.0, 230.0),
+                      child: DropdownButtonFormField<DateTime>(
+                        initialValue: availableMonths.isEmpty
+                            ? null
+                            : selectedPayslipMonth,
+                        decoration: const InputDecoration(
+                          labelText: 'Payroll Month',
+                          prefixIcon: Icon(Icons.calendar_month_outlined),
+                          border: OutlineInputBorder(),
+                        ),
+                        items: availableMonths
+                            .map((month) => DropdownMenuItem(
+                                  value: month,
+                                  child: Text(
+                                      DateFormat('MMMM yyyy').format(month)),
+                                ))
+                            .toList(),
+                        onChanged: availableMonths.isEmpty
+                            ? null
+                            : (month) {
+                                if (month == null) return;
+                                setState(() {
+                                  selectedPayslipMonth = month;
+                                  selectedPayslipEmployeeId = null;
+                                });
+                              },
+                      ),
+                    ),
+                    SizedBox(
+                      width: mobileControlWidth,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: effectiveEmployeeId,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Employee',
+                          prefixIcon: Icon(Icons.person_search_outlined),
+                          border: OutlineInputBorder(),
+                        ),
+                        hint: Text(employees.isEmpty
+                            ? 'No payroll records for this month'
+                            : 'Select employee'),
+                        items: employees
+                            .map((employee) => DropdownMenuItem(
+                                  value: employee.employeeId,
+                                  child: Text(
+                                    '${employee.employeeId} - ${employee.name}',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ))
+                            .toList(),
+                        onChanged: employees.isEmpty
+                            ? null
+                            : (employeeId) => setState(
+                                () => selectedPayslipEmployeeId = employeeId),
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed:
+                          selectedEmployee == null || selectedRecord == null
+                              ? null
+                              : () => _viewAdminPayslip(
+                                  selectedEmployee, selectedRecord!),
+                      icon: const Icon(Icons.picture_as_pdf_outlined),
+                      label: const Text('View Payslip'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 22, vertical: 18),
+                      ),
+                    ),
+                    IconButton.outlined(
+                      tooltip: 'Refresh payroll records',
+                      onPressed: () async {
+                        await service.loadPayrollFromSupabase();
+                        await service.loadEmployeesFromSupabase();
+                      },
+                      icon: const Icon(Icons.refresh),
+                    ),
+                  ],
+                ),
+                if (selectedEmployee != null && selectedRecord != null) ...[
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F7FF),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: _champagne, width: 1.5),
+                    ),
+                    child: Row(
+                      children: [
+                        EmployeePhoto(
+                          name: selectedEmployee.name,
+                          photoUrl: selectedEmployee.photoUrl,
+                          radius: 34,
+                          borderColor: _midnight,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(selectedEmployee.name,
+                                  style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${selectedEmployee.employeeId} • '
+                                '${selectedEmployee.department} • '
+                                '${selectedEmployee.branchId}',
+                                style: const TextStyle(color: Colors.black54),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            const Text('NET PAY',
+                                style: TextStyle(
+                                    color: Colors.black54,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700)),
+                            Text(
+                              'RM ${NumberFormat('#,##0.00').format(selectedRecord.netPay)}',
+                              style: const TextStyle(
+                                  color: _midnight,
+                                  fontSize: 21,
+                                  fontWeight: FontWeight.w900),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _viewAdminPayslip(
+      Employee employee, PayrollRecord payroll) async {
+    try {
+      await service.loadAttendanceFromSupabase();
+      final bytes = await PdfService.buildPayslip(
+        employee: employee,
+        p: payroll,
+        history: service.employeePayroll(employee.employeeId),
+        attendance: service.employeeAttendance(employee.employeeId),
+      );
+      if (kIsWeb) {
+        final period = DateFormat('yyyy-MM').format(payroll.period);
+        await Printing.sharePdf(
+          bytes: bytes,
+          filename: 'payslip_${employee.employeeId}_$period.pdf',
+        );
+      } else {
+        await Printing.layoutPdf(
+          onLayout: (_) async => bytes,
+          format: PdfService.payslipPageFormat,
+          dynamicLayout: false,
+          forceCustomPrintPaper: true,
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      _message('Unable to generate payslip: $error');
+    }
+  }
+
+// ============================================================================
+// PAYROLL PAGE
+// ============================================================================
+
+  Future<void> _printPayrollIncrementList({
+    required DateTime month,
+    required List<Map<String, dynamic>> increments,
+  }) async {
+    final printedAt = DateTime.now();
+    final logo = await _loadHasaniBooksPdfLogo();
+    final document = pw.Document();
+    final groupedByBranch = <String, List<Map<String, dynamic>>>{};
+    for (final item in increments) {
+      final branch = item['branch_name']?.toString().trim() ?? '';
+      groupedByBranch
+          .putIfAbsent(branch.isEmpty ? 'UNASSIGNED BRANCH' : branch, () => [])
+          .add(item);
+    }
+    final orderedBranches = groupedByBranch.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    document.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(28),
+        header: (_) => pw.Column(
+          children: [
+            _brandedPdfHeader(
+                'EMPLOYEE INCREMENT LIST', month, printedAt, logo),
+            pw.SizedBox(height: 12),
+          ],
+        ),
+        footer: (_) => _brandedPdfFooter(printedAt),
+        build: (_) => orderedBranches
+            .expand<pw.Widget>(
+              (branch) => [
+                pw.Container(
+                  width: double.infinity,
+                  padding: const pw.EdgeInsets.all(7),
+                  color: PdfColors.blue100,
+                  child: pw.Text(
+                    branch.toUpperCase(),
+                    style: pw.TextStyle(
+                      fontSize: 11,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ),
+                pw.TableHelper.fromTextArray(
+                  headers: const ['EMPLOYEE', 'EMPLOYEE ID', 'INCREMENT'],
+                  data: groupedByBranch[branch]!
+                      .map(
+                        (item) => [
+                          item['employee_name'].toString(),
+                          item['employee_id'].toString(),
+                          'RM ${_payrollNumber(item['increment_amount']).toStringAsFixed(2)}',
+                        ],
+                      )
+                      .toList(),
+                  headerStyle: pw.TextStyle(
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                  headerDecoration:
+                      const pw.BoxDecoration(color: PdfColors.grey200),
+                  cellStyle: const pw.TextStyle(fontSize: 9),
+                  cellPadding: const pw.EdgeInsets.all(6),
+                  border: pw.TableBorder.all(
+                    color: PdfColors.grey500,
+                    width: .5,
+                  ),
+                ),
+                pw.SizedBox(height: 14),
+              ],
+            )
+            .toList(),
+      ),
+    );
+    await Printing.layoutPdf(
+      name: 'Employee_Increments_${DateFormat('yyyy_MM').format(month)}.pdf',
+      format: PdfPageFormat.a4,
+      onLayout: (_) => document.save(),
+    );
+  }
+
+  Future<void> _showPayrollIncrementListDialog({
+    required DateTime month,
+    required List<Map<String, dynamic>> increments,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          'Employee Increments - ${DateFormat('MMMM yyyy').format(month)}',
+        ),
+        content: SizedBox(
+          width: 720,
+          child: increments.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 28),
+                  child: Text(
+                    'No employee allowance increments were found for this month.',
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              : Scrollbar(
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SingleChildScrollView(
+                      child: DataTable(
+                        headingRowColor: WidgetStatePropertyAll(
+                          const Color(0xFFD9EAF7),
+                        ),
+                        columns: const [
+                          DataColumn(label: Text('Employee')),
+                          DataColumn(label: Text('Branch')),
+                          DataColumn(
+                            label: Text('Increment Amount'),
+                            numeric: true,
+                          ),
+                        ],
+                        rows: increments
+                            .map(
+                              (item) => DataRow(
+                                cells: [
+                                  DataCell(
+                                    Text(
+                                      '${item['employee_name']}\n${item['employee_id']}',
+                                    ),
+                                  ),
+                                  DataCell(
+                                      Text(item['branch_name'].toString())),
+                                  DataCell(
+                                    Text(
+                                      'RM ${_payrollNumber(item['increment_amount']).toStringAsFixed(2)}',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+        actions: [
+          FilledButton.icon(
+            onPressed: increments.isEmpty
+                ? null
+                : () => _printPayrollIncrementList(
+                      month: month,
+                      increments: increments,
+                    ),
+            icon: const Icon(Icons.print_outlined),
+            label: const Text('Print A4'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _printPayrollIncrementComparison({
+    required DateTime month,
+    required List<Map<String, dynamic>> increments,
+  }) async {
+    final comparisons = increments
+        .where((item) => item['previous_period'] is DateTime)
+        .toList();
+    if (comparisons.isEmpty) {
+      _message('No calculated increment comparisons are available to print.');
+      return;
+    }
+
+    final printedAt = DateTime.now();
+    final logo = await _loadHasaniBooksPdfLogo();
+    final document = pw.Document();
+    final groupedByBranch = <String, List<Map<String, dynamic>>>{};
+    for (final item in comparisons) {
+      final branch = item['branch_name']?.toString().trim() ?? '';
+      groupedByBranch
+          .putIfAbsent(branch.isEmpty ? 'UNASSIGNED BRANCH' : branch, () => [])
+          .add(item);
+    }
+    final orderedBranches = groupedByBranch.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    String comparisonValue(
+      Map<String, dynamic> item,
+      String previousKey,
+      String currentKey,
+    ) {
+      final previous = _payrollNumber(item[previousKey]);
+      final current = _payrollNumber(item[currentKey]);
+      final difference = current - previous;
+      final sign = difference > 0 ? '+' : '';
+      return '${previous.toStringAsFixed(2)} -> ${current.toStringAsFixed(2)}\n'
+          '($sign${difference.toStringAsFixed(2)})';
+    }
+
+    document.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.fromLTRB(24, 24, 24, 26),
+        header: (_) => pw.Column(
+          children: [
+            _brandedPdfHeader(
+              'EMPLOYEE INCREMENT COMPARISON',
+              month,
+              printedAt,
+              logo,
+            ),
+            pw.SizedBox(height: 10),
+          ],
+        ),
+        footer: (_) => _brandedPdfFooter(printedAt),
+        build: (_) => orderedBranches
+            .expand<pw.Widget>(
+              (branch) => [
+                pw.Container(
+                  width: double.infinity,
+                  padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                  color: PdfColors.blue100,
+                  child: pw.Text(
+                    branch.toUpperCase(),
+                    style: pw.TextStyle(
+                      color: PdfColors.blue900,
+                      fontSize: 13,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ),
+                pw.TableHelper.fromTextArray(
+                  headers: const [
+                    'EMPLOYEE',
+                    'ID',
+                    'NORMAL BASELINE (7M) -> CURRENT',
+                    'GAJI',
+                    'ELAUN KEDATANGAN',
+                    'ELAUN PERKHIDMATAN',
+                    'ELAUN KERAJINAN',
+                    'INCREMENT',
+                  ],
+                  data: groupedByBranch[branch]!.map((item) {
+                    final previousPeriod = item['previous_period'] as DateTime;
+                    final currentPeriod = item['current_period'] as DateTime;
+                    return [
+                      item['employee_name'].toString(),
+                      item['employee_id'].toString(),
+                      '7M BASELINE (REF ${DateFormat('MMM-yy').format(previousPeriod)}) -> '
+                          '${DateFormat('MMM-yy').format(currentPeriod)}',
+                      comparisonValue(
+                        item,
+                        'previous_basic_salary',
+                        'current_basic_salary',
+                      ),
+                      comparisonValue(
+                        item,
+                        'previous_attendance_allowance',
+                        'current_attendance_allowance',
+                      ),
+                      comparisonValue(
+                        item,
+                        'previous_service_allowance',
+                        'current_service_allowance',
+                      ),
+                      comparisonValue(
+                        item,
+                        'previous_diligence_allowance',
+                        'current_diligence_allowance',
+                      ),
+                      'RM ${_payrollNumber(item['increment_amount']).toStringAsFixed(2)}',
+                    ];
+                  }).toList(),
+                  columnWidths: const {
+                    0: pw.FlexColumnWidth(1.8),
+                    1: pw.FlexColumnWidth(.9),
+                    2: pw.FlexColumnWidth(1.25),
+                    3: pw.FlexColumnWidth(1.15),
+                    4: pw.FlexColumnWidth(1.25),
+                    5: pw.FlexColumnWidth(1.25),
+                    6: pw.FlexColumnWidth(1.25),
+                    7: pw.FlexColumnWidth(.9),
+                  },
+                  headerStyle: pw.TextStyle(
+                    fontSize: 7,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                  headerDecoration:
+                      const pw.BoxDecoration(color: PdfColors.grey200),
+                  cellStyle: const pw.TextStyle(fontSize: 7),
+                  cellAlignment: pw.Alignment.center,
+                  cellPadding: const pw.EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 5,
+                  ),
+                  border: pw.TableBorder.all(
+                    color: PdfColors.grey500,
+                    width: .5,
+                  ),
+                ),
+                pw.SizedBox(height: 12),
+              ],
+            )
+            .toList(),
+      ),
+    );
+
+    await Printing.layoutPdf(
+      name: 'Increment_Comparison_${DateFormat('yyyy_MM').format(month)}.pdf',
+      format: PdfPageFormat.a4.landscape,
+      dynamicLayout: false,
+      forceCustomPrintPaper: true,
+      onLayout: (_) => document.save(),
+    );
+  }
+
+  Future<void> _showPayrollIncrementComparisonDialog({
+    required DateTime month,
+    required List<Map<String, dynamic>> increments,
+  }) async {
+    final comparisons = increments
+        .where((item) => item['previous_period'] is DateTime)
+        .toList();
+
+    String valueChange(
+      Map<String, dynamic> item,
+      String previousKey,
+      String currentKey,
+    ) {
+      final previous = _payrollNumber(item[previousKey]);
+      final current = _payrollNumber(item[currentKey]);
+      final difference = current - previous;
+      final sign = difference > 0 ? '+' : '';
+      return 'RM ${previous.toStringAsFixed(2)}  ->  '
+          'RM ${current.toStringAsFixed(2)}\n'
+          '$sign${difference.toStringAsFixed(2)}';
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          'Increment Comparison - ${DateFormat('MMMM yyyy').format(month)}',
+        ),
+        content: SizedBox(
+          width: 1180,
+          height: MediaQuery.sizeOf(dialogContext).height * .68,
+          child: comparisons.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No calculated increment comparisons were found for this month.',
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              : Scrollbar(
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SingleChildScrollView(
+                      child: DataTable(
+                        headingRowColor: const WidgetStatePropertyAll(
+                          Color(0xFFD9EAF7),
+                        ),
+                        columns: const [
+                          DataColumn(label: Text('Employee')),
+                          DataColumn(label: Text('Branch')),
+                          DataColumn(
+                            label: Text('Normal Baseline (7M) -> Current'),
+                          ),
+                          DataColumn(label: Text('GAJI')),
+                          DataColumn(label: Text('ELAUN KEDATANGAN')),
+                          DataColumn(label: Text('ELAUN PERKHIDMATAN')),
+                          DataColumn(label: Text('ELAUN KERAJINAN')),
+                          DataColumn(
+                            label: Text('Increment'),
+                            numeric: true,
+                          ),
+                        ],
+                        rows: comparisons.map((item) {
+                          final previousPeriod =
+                              item['previous_period'] as DateTime;
+                          final currentPeriod =
+                              item['current_period'] as DateTime;
+                          return DataRow(
+                            cells: [
+                              DataCell(
+                                Text(
+                                  '${item['employee_name']}\n${item['employee_id']}',
+                                ),
+                              ),
+                              DataCell(Text(item['branch_name'].toString())),
+                              DataCell(
+                                Text(
+                                  '7-month baseline '
+                                  '(ref ${DateFormat('MMM yyyy').format(previousPeriod)})'
+                                  '  ->  '
+                                  '${DateFormat('MMM yyyy').format(currentPeriod)}',
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  valueChange(
+                                    item,
+                                    'previous_basic_salary',
+                                    'current_basic_salary',
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  valueChange(
+                                    item,
+                                    'previous_attendance_allowance',
+                                    'current_attendance_allowance',
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  valueChange(
+                                    item,
+                                    'previous_service_allowance',
+                                    'current_service_allowance',
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  valueChange(
+                                    item,
+                                    'previous_diligence_allowance',
+                                    'current_diligence_allowance',
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  'RM ${_payrollNumber(item['increment_amount']).toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF087F5B),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+        actions: [
+          FilledButton.icon(
+            onPressed: comparisons.isEmpty
+                ? null
+                : () => _printPayrollIncrementComparison(
+                      month: month,
+                      increments: increments,
+                    ),
+            icon: const Icon(Icons.print_outlined),
+            label: const Text('Print A4 Landscape'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showSchedulePayslipPublicationDialog({
+    required DateTime month,
+    required int payrollCount,
+    required List<Map<String, dynamic>> increments,
+  }) async {
+    final malaysiaNowUtcFields =
+        DateTime.now().toUtc().add(const Duration(hours: 8));
+    final malaysiaNow = DateTime(
+      malaysiaNowUtcFields.year,
+      malaysiaNowUtcFields.month,
+      malaysiaNowUtcFields.day,
+      malaysiaNowUtcFields.hour,
+      malaysiaNowUtcFields.minute,
+    );
+    final standardRelease = DateTime(month.year, month.month + 1, 5, 21);
+    var releaseTime = standardRelease.isAfter(malaysiaNow)
+        ? standardRelease
+        : malaysiaNow.add(const Duration(minutes: 2));
+    var saving = false;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setModalState) {
+          Future<void> chooseDate() async {
+            final selected = await showDatePicker(
+              context: dialogContext,
+              initialDate: releaseTime,
+              firstDate: DateTime(
+                malaysiaNow.year,
+                malaysiaNow.month,
+                malaysiaNow.day,
+              ),
+              lastDate: DateTime(malaysiaNow.year + 2, 12, 31),
+              helpText: 'Select Payslip Release Date (Malaysia)',
+            );
+            if (selected == null) return;
+            setModalState(() {
+              releaseTime = DateTime(
+                selected.year,
+                selected.month,
+                selected.day,
+                releaseTime.hour,
+                releaseTime.minute,
+              );
+            });
+          }
+
+          Future<void> chooseTime() async {
+            final selected = await showTimePicker(
+              context: dialogContext,
+              initialTime: TimeOfDay.fromDateTime(releaseTime),
+              helpText: 'Select Payslip Release Time (Malaysia)',
+            );
+            if (selected == null) return;
+            setModalState(() {
+              releaseTime = DateTime(
+                releaseTime.year,
+                releaseTime.month,
+                releaseTime.day,
+                selected.hour,
+                selected.minute,
+              );
+            });
+          }
+
+          Future<void> showNotificationPreview() async {
+            final monthText = DateFormat('MMMM yyyy').format(month);
+            final previewIncrementAmount = increments.isEmpty
+                ? 150.0
+                : _payrollNumber(increments.first['increment_amount']);
+
+            Widget notificationTile({
+              required IconData icon,
+              required String title,
+              required String body,
+            }) {
+              return ListTile(
+                tileColor: const Color(0xFF1976E9).withValues(alpha: .06),
+                leading: CircleAvatar(
+                  backgroundColor:
+                      const Color(0xFF1976E9).withValues(alpha: .10),
+                  child: Icon(icon, color: const Color(0xFF08255F)),
+                ),
+                title: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                subtitle: Text(body),
+                trailing: const Icon(
+                  Icons.circle,
+                  size: 9,
+                  color: Color(0xFF1976E9),
+                ),
+              );
+            }
+
+            await showDialog<void>(
+              context: dialogContext,
+              builder: (previewContext) => AlertDialog(
+                title: const Row(
+                  children: [
+                    Icon(Icons.visibility_outlined),
+                    SizedBox(width: 10),
+                    Expanded(child: Text('Employee Notification Preview')),
+                  ],
+                ),
+                content: SizedBox(
+                  width: 470,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF4D6),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          'PREVIEW ONLY — no notification is sent and no '
+                          'payslip is published.',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFD8E1EF)),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Column(
+                          children: [
+                            notificationTile(
+                              icon: Icons.receipt_long_outlined,
+                              title: 'New Payslip Available',
+                              body: 'Your $monthText payslip is ready to view.',
+                            ),
+                            const Divider(height: 1),
+                            notificationTile(
+                              icon: Icons.trending_up_outlined,
+                              title: 'Salary Increment Confirmed',
+                              body: 'Your RM '
+                                  '${previewIncrementAmount.toStringAsFixed(2)} '
+                                  'salary increment is reflected in your '
+                                  '$monthText payslip.',
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (increments.isEmpty) ...[
+                        const SizedBox(height: 10),
+                        const Text(
+                          'RM 150.00 is an example because this month has no '
+                          'increment employee in the current list.',
+                          style: TextStyle(
+                            color: Color(0xFF667085),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                actions: [
+                  FilledButton(
+                    onPressed: () => Navigator.of(previewContext).pop(),
+                    child: const Text('Design Confirmed'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          Future<void> scheduleRelease() async {
+            final releaseUtc = DateTime.utc(
+              releaseTime.year,
+              releaseTime.month,
+              releaseTime.day,
+              releaseTime.hour,
+              releaseTime.minute,
+            ).subtract(const Duration(hours: 8));
+            if (releaseUtc.isBefore(
+              DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
+            )) {
+              _message('Choose a release time that has not passed.');
+              return;
+            }
+
+            setModalState(() => saving = true);
+            try {
+              final incrementEmployees = increments
+                  .map(
+                    (item) => {
+                      'employee_id': item['employee_id']?.toString().trim(),
+                      'increment_amount':
+                          _payrollNumber(item['increment_amount']),
+                    },
+                  )
+                  .where(
+                    (item) =>
+                        item['employee_id']?.toString().isNotEmpty == true &&
+                        _payrollNumber(item['increment_amount']) > 0,
+                  )
+                  .toList();
+              await SupabaseService.database.rpc(
+                'schedule_monthly_payslip_release',
+                params: {
+                  'p_payroll_month': DateFormat('yyyy-MM-dd')
+                      .format(DateTime(month.year, month.month)),
+                  'p_release_at': releaseUtc.toIso8601String(),
+                  'p_increment_employees': incrementEmployees,
+                },
+              );
+              await service.loadPayrollMonthFromSupabase(month);
+              if (!mounted || !dialogContext.mounted) return;
+              Navigator.of(dialogContext).pop();
+              setState(() {});
+              _message(
+                '$payrollCount payslips scheduled for '
+                '${DateFormat('dd MMM yyyy, hh:mm a').format(releaseTime)} '
+                'Malaysia time. ${incrementEmployees.length} increment '
+                'employee(s) will receive an additional notification.',
+              );
+            } catch (error) {
+              if (dialogContext.mounted) {
+                setModalState(() => saving = false);
+              }
+              if (mounted) {
+                _message('Unable to schedule payslip publication: $error');
+              }
+            }
+          }
+
+          return AlertDialog(
+            title: const Text('Publish Payslips'),
+            content: SizedBox(
+              width: 500,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    DateFormat('MMMM yyyy').format(month),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('$payrollCount employee payslip(s) will be published.'),
+                  Text(
+                    '${increments.length} increment employee(s) will also '
+                    'receive an increment notification.',
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Employees cannot view the payslip before this Malaysia '
+                    'release time. Both notifications are released together.',
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: saving ? null : chooseDate,
+                        icon: const Icon(Icons.calendar_month_outlined),
+                        label:
+                            Text(DateFormat('dd MMM yyyy').format(releaseTime)),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: saving ? null : chooseTime,
+                        icon: const Icon(Icons.schedule_outlined),
+                        label: Text(DateFormat('hh:mm a').format(releaseTime)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              OutlinedButton.icon(
+                onPressed: saving ? null : showNotificationPreview,
+                icon: const Icon(Icons.visibility_outlined),
+                label: const Text('Preview Notifications'),
+              ),
+              TextButton(
+                onPressed:
+                    saving ? null : () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton.icon(
+                onPressed: saving ? null : scheduleRelease,
+                icon: saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.publish_outlined),
+                label: Text(saving ? 'Scheduling...' : 'Confirm Publish'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _payrollActionMenu(String label, IconData icon, List<Widget> actions) {
+    return MenuAnchor(
+      menuChildren: actions,
+      builder: (context, controller, child) => OutlinedButton.icon(
+        onPressed: () =>
+            controller.isOpen ? controller.close() : controller.open(),
+        icon: Icon(icon),
+        label: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(label),
+          const SizedBox(width: 6),
+          const Icon(Icons.expand_more, size: 18),
+        ]),
+      ),
+    );
+  }
+
+  Widget _payrollOverviewTable(List<Map<String, dynamic>> records,
+      Map<String, Map<String, dynamic>> employees) {
+    String status(Map<String, dynamic> row) {
+      bool flag(String key) =>
+          row[key] == true || row[key]?.toString().toLowerCase() == 'true';
+      final savedStatus = '${row['status']}'.toLowerCase();
+      if (flag('is_paid') ||
+          flag('isPaid') ||
+          row['paid_at'] != null ||
+          row['paidAt'] != null ||
+          savedStatus == 'paid') {
+        return 'Paid';
+      }
+      if (flag('is_published') || savedStatus == 'published') {
+        return 'Published';
+      }
+      if (flag('is_finalized') ||
+          row['finalized_at'] != null ||
+          const {'finalized', 'finalised'}.contains(savedStatus)) {
+        return 'Finalized';
+      }
+      if (savedStatus == 'locked') return 'Locked';
+      return 'Draft';
+    }
+
+    void details(Map<String, dynamic> row) {
+      showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+                title: Text('Payroll details · ${row['employee_id']}'),
+                content: SizedBox(
+                    width: 640,
+                    child: SingleChildScrollView(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (final entry in row.entries.where((entry) =>
+                                !const {
+                                  'id',
+                                  'created_at',
+                                  'updated_at',
+                                  'bank_account',
+                                  'new_ic_no'
+                                }.contains(entry.key)))
+                              Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 6),
+                                  child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                            child: Text(
+                                                entry.key.replaceAll('_', ' '),
+                                                style: const TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.w600))),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                            child: SelectableText(
+                                                entry.value?.toString() ??
+                                                    '-')),
+                                      ])),
+                          ]),
+                    )),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'))
+                ],
+              ));
+    }
+
+    return PayrollOverviewTable(
+        entries: records.map((row) {
+      final amounts = SavedPayrollAmounts.fromRow(row);
+      final id = _normalizeBranchValue(row['employee_id']);
+      return PayrollOverviewEntry(
+        employeeId: id,
+        name: employees[id]?['name']?.toString() ?? id,
+        basicSalary: _money(_payrollNumber(row['basic_salary'])),
+        gross: _money(amounts.gross),
+        deductions: _money(amounts.deductions),
+        net: _money(amounts.net),
+        status: status(row),
+        onDetails: () => details(row),
+      );
+    }).toList());
+  }
+
+  Widget _payrollPage() {
+    return FutureBuilder<List<dynamic>>(
+      future: _payrollPageData(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(60),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Payroll',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF172033),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Text(
+                    'Unable to load payroll page.\n\n${snapshot.error}',
+                    style: TextStyle(color: Colors.red.shade800),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final data = snapshot.data ?? const [[], [], [], [], []];
+        final branches = List<Map<String, dynamic>>.from(data[0] as List);
+        final employees = List<Map<String, dynamic>>.from(data[1] as List);
+        final rawPayrollRecords =
+            List<Map<String, dynamic>>.from(data[2] as List);
+        final salaryDefaults = List<Map<String, dynamic>>.from(data[3] as List);
+        final monthlyAttendance =
+            List<Map<String, dynamic>>.from(data[4] as List);
+
+        final salaryDefaultByEmployee = <String, Map<String, dynamic>>{};
+        for (final row in salaryDefaults) {
+          final employeeId = _normalizeBranchValue(row['employee_id']);
+          if (employeeId.isNotEmpty) {
+            salaryDefaultByEmployee[employeeId] = row;
+          }
+        }
+
+        final employeeBranchById = <String, String>{};
+        for (final employee in employees) {
+          final employeeId = _normalizeBranchValue(employee['employee_id']);
+          final branchId = _payrollBranchIdFromEmployee(employee);
+          if (employeeId.isNotEmpty) employeeBranchById[employeeId] = branchId;
+        }
+
+        final branchGroups = <String, List<Map<String, dynamic>>>{};
+        final branchNames = <String, String>{};
+
+        for (final branch in branches) {
+          final id = _branchIdFromMap(branch);
+          final name = _branchNameFromMap(branch, id);
+          if (id.isNotEmpty) {
+            branchGroups.putIfAbsent(id, () => []);
+            branchNames[id] = name;
+          }
+        }
+
+        for (final employee in employees) {
+          // Generation can include eligible staff before their first payroll
+          // exists, using employment dates for the selected month.
+          if (!PayrollMonthScope.activeInMonth(
+              employee, selectedPayrollMonth)) {
+            continue;
+          }
+          final branchId = _payrollBranchIdFromEmployee(employee);
+          if (branchId.isEmpty) continue;
+          branchGroups.putIfAbsent(branchId, () => []).add(employee);
+          branchNames.putIfAbsent(branchId, () => branchId);
+        }
+
+        final branchIds = branchGroups.keys.toList()
+          ..sort(
+            (a, b) => (branchNames[a] ?? a)
+                .toLowerCase()
+                .compareTo((branchNames[b] ?? b).toLowerCase()),
+          );
+
+        final attendanceBranchCounts = <String, Map<String, int>>{};
+        for (final attendance in monthlyAttendance) {
+          final employeeId = _normalizeBranchValue(attendance['employee_id']);
+          final branchId = _normalizeBranchValue(attendance['branch_id']);
+          if (employeeId.isEmpty || branchId.isEmpty) continue;
+          final counts = attendanceBranchCounts.putIfAbsent(
+            employeeId,
+            () => <String, int>{},
+          );
+          counts[branchId] = (counts[branchId] ?? 0) + 1;
+        }
+        final attendanceBranchByEmployee = <String, String>{};
+        for (final entry in attendanceBranchCounts.entries) {
+          final branchesByFrequency = entry.value.entries.toList()
+            ..sort((a, b) {
+              final countComparison = b.value.compareTo(a.value);
+              return countComparison != 0
+                  ? countComparison
+                  : a.key.compareTo(b.key);
+            });
+          if (branchesByFrequency.isNotEmpty) {
+            attendanceBranchByEmployee[entry.key] =
+                branchesByFrequency.first.key;
+          }
+        }
+
+        final payrollRecords = rawPayrollRecords.map((record) {
+          final copy = Map<String, dynamic>.from(record);
+          final employeeId = _normalizeBranchValue(record['employee_id']);
+          final branchId = employeeBranchById[employeeId] ??
+              _normalizeBranchValue(record['branch_id']);
+          if (branchId.isNotEmpty) {
+            copy['branch_id'] = branchId;
+            copy['branch_name'] = branchNames[branchId] ?? branchId;
+          }
+          return copy;
+        }).toList();
+        final payrollByEmployee = <String, List<Map<String, dynamic>>>{};
+        for (final record in payrollRecords) {
+          final employeeId = _normalizeBranchValue(record['employee_id']);
+          if (employeeId.isEmpty) continue;
+          payrollByEmployee.putIfAbsent(employeeId, () => []).add(record);
+        }
+
+        final eligibleMonthPayroll = _visibleMonthPayroll(
+          payrollRecords,
+          employees,
+          selectedPayrollMonth,
+        );
+        final visiblePayrollRecords = eligibleMonthPayroll.where((record) {
+          final branchMatches = selectedPayrollBranchId == null ||
+              _normalizeBranchValue(record['branch_id']) ==
+                  selectedPayrollBranchId;
+
+          final monthMatches = _payrollPeriodMatchesMonth(
+            record['period'],
+            selectedPayrollMonth,
+          );
+          return branchMatches && monthMatches;
+        }).toList()
+          ..sort(
+            (a, b) => _normalizeBranchValue(a['employee_id'])
+                .compareTo(_normalizeBranchValue(b['employee_id'])),
+          );
+
+        final employeeById = <String, Map<String, dynamic>>{
+          for (final employee in employees)
+            _normalizeBranchValue(employee['employee_id']): employee,
+        };
+        final incrementPayrollRecords = eligibleMonthPayroll;
+        final allMonthlyIncrements = <Map<String, dynamic>>[];
+        for (final current in incrementPayrollRecords) {
+          final employeeId = _normalizeBranchValue(current['employee_id']);
+          final currentPeriod =
+              DateTime.tryParse(current['period']?.toString() ?? '');
+          if (employeeId.isEmpty || currentPeriod == null) continue;
+
+          final history =
+              (payrollByEmployee[employeeId] ?? const []).where((record) {
+            final period =
+                DateTime.tryParse(record['period']?.toString() ?? '');
+            return period != null && !period.isAfter(currentPeriod);
+          }).map((record) {
+            final period = DateTime.parse(record['period'].toString());
+            return (
+              period: period,
+              basicSalary: _payrollNumber(record['basic_salary']),
+              attendanceAllowance: _payrollNumber(record['elaun_kedatangan']),
+              serviceAllowance: _payrollNumber(record['elaun_perkhidmatan']),
+              diligenceAllowance: _payrollNumber(record['elaun_kerajinan']),
+            );
+          }).toList();
+          final incrementComparison =
+              PayrollCalculationService.payrollIncrementComparisonForMonth(
+            history,
+            currentPeriod,
+          );
+          final calculatedCurrentMonth = incrementComparison?.amount;
+          final incDetails =
+              salaryDefaultByEmployee[employeeId]?['inc_details'];
+          final defaultCurrentMonthAmount =
+              _incrementDetailsMatchesMonth(incDetails, currentPeriod)
+                  ? _incrementDetailsAmount(incDetails)
+                  : null;
+          final validDefaultCurrentMonthAmount =
+              defaultCurrentMonthAmount != null &&
+                      PayrollCalculationService.isValidPayrollIncrementAmount(
+                        defaultCurrentMonthAmount,
+                      )
+                  ? defaultCurrentMonthAmount
+                  : null;
+          final incrementAmount =
+              calculatedCurrentMonth ?? validDefaultCurrentMonthAmount;
+          if (incrementAmount == null || incrementAmount <= 0) {
+            continue;
+          }
+
+          final employee = employeeById[employeeId] ?? const {};
+          final attendanceBranch = attendanceBranchByEmployee[employeeId] ??
+              employeeBranchById[employeeId] ??
+              _normalizeBranchValue(current['branch_id']);
+          allMonthlyIncrements.add({
+            'employee_id': employeeId,
+            'employee_name':
+                employee['name']?.toString().trim().isNotEmpty == true
+                    ? employee['name'].toString().trim()
+                    : employeeId,
+            'branch_name': branchNames[attendanceBranch] ?? attendanceBranch,
+            'branch_id': attendanceBranch,
+            'increment_amount': incrementAmount,
+            if (incrementComparison != null) ...{
+              'previous_period': incrementComparison.previousPeriod,
+              'current_period': incrementComparison.currentPeriod,
+              'previous_basic_salary': incrementComparison.previousBasicSalary,
+              'current_basic_salary': incrementComparison.currentBasicSalary,
+              'previous_attendance_allowance':
+                  incrementComparison.previousAttendanceAllowance,
+              'current_attendance_allowance':
+                  incrementComparison.currentAttendanceAllowance,
+              'previous_service_allowance':
+                  incrementComparison.previousServiceAllowance,
+              'current_service_allowance':
+                  incrementComparison.currentServiceAllowance,
+              'previous_diligence_allowance':
+                  incrementComparison.previousDiligenceAllowance,
+              'current_diligence_allowance':
+                  incrementComparison.currentDiligenceAllowance,
+            },
+          });
+        }
+        allMonthlyIncrements.sort((a, b) {
+          final branchComparison = a['branch_name']
+              .toString()
+              .toLowerCase()
+              .compareTo(b['branch_name'].toString().toLowerCase());
+          return branchComparison != 0
+              ? branchComparison
+              : a['employee_name']
+                  .toString()
+                  .toLowerCase()
+                  .compareTo(b['employee_name'].toString().toLowerCase());
+        });
+        final monthlyIncrements = selectedPayrollBranchId == null
+            ? allMonthlyIncrements
+            : allMonthlyIncrements
+                .where(
+                  (item) => item['branch_id'] == selectedPayrollBranchId,
+                )
+                .toList();
+
+        double totalPayroll = 0;
+        for (final payroll in visiblePayrollRecords) {
+          totalPayroll += _payrollTotalEarnings(payroll);
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async => setState(() {}),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text('Payroll',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF172033),
+                          )),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: selectedPayrollMonth,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                          helpText: 'Select Payroll Month',
+                        );
+                        if (picked != null && mounted) {
+                          setState(() {
+                            selectedPayrollMonth = DateTime(
+                              picked.year,
+                              picked.month,
+                            );
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.calendar_month_outlined),
+                      label: Text(
+                        DateFormat('MMMM yyyy').format(selectedPayrollMonth),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Select a branch, select employees, then generate payroll for the selected month.',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _showGenerateAttendancePayrollDialog,
+                      icon: const Icon(Icons.calculate_outlined),
+                      label: const Text('Generate Payroll'),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: _showEditPayrollDialog,
+                      icon: const Icon(Icons.edit_note_outlined),
+                      label: const Text('Edit Payroll'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: incrementPayrollRecords.isEmpty
+                          ? null
+                          : () => _showSchedulePayslipPublicationDialog(
+                                month: selectedPayrollMonth,
+                                payrollCount: incrementPayrollRecords.length,
+                                increments: allMonthlyIncrements,
+                              ),
+                      icon: const Icon(Icons.publish_outlined),
+                      label: const Text('Publish Payslips'),
+                    ),
+                    _payrollActionMenu(
+                        'Allowances & Bonus', Icons.card_giftcard_outlined, [
+                      MenuItemButton(
+                        onPressed: () => showDialog<void>(
+                          context: context,
+                          builder: (_) => AttendanceAllowanceReportDialog(
+                            initialMonth: selectedPayrollMonth,
+                            load: (month) =>
+                                service.loadAttendanceAllowanceReport(
+                              month,
+                              branchId: selectedPayrollBranchId,
+                            ),
+                          ),
+                        ),
+                        leadingIcon: const Icon(Icons.receipt_long_outlined),
+                        child: const Text('Attendance Allowance Deductions'),
+                      ),
+                      MenuItemButton(
+                        onPressed: () => showDialog<void>(
+                          context: context,
+                          builder: (_) => BonusReportDialog(
+                            initialMonth: selectedPayrollMonth,
+                            load: (month) => service.loadBonusReport(month,
+                                branchId: selectedPayrollBranchId),
+                          ),
+                        ),
+                        leadingIcon: const Icon(Icons.card_giftcard_outlined),
+                        child: const Text('Bonus Recipients'),
+                      ),
+                    ]),
+                    _payrollActionMenu(
+                        'Increments', Icons.trending_up_outlined, [
+                      MenuItemButton(
+                        onPressed: () => _showPayrollIncrementListDialog(
+                          month: selectedPayrollMonth,
+                          increments: monthlyIncrements,
+                        ),
+                        leadingIcon: const Icon(Icons.trending_up_outlined),
+                        child: Text(
+                          'Increment List (${monthlyIncrements.length})',
+                        ),
+                      ),
+                      MenuItemButton(
+                        onPressed: monthlyIncrements.isEmpty
+                            ? null
+                            : () => _showPayrollIncrementComparisonDialog(
+                                  month: selectedPayrollMonth,
+                                  increments: monthlyIncrements,
+                                ),
+                        leadingIcon: const Icon(Icons.compare_arrows_outlined),
+                        child: const Text('Compare Increments'),
+                      ),
+                    ]),
+                    _payrollActionMenu(
+                        'Import & Export', Icons.import_export_outlined, [
+                      MenuItemButton(
+                        onPressed: () {
+                          setState(() {
+                            selectedPage = 5;
+                          });
+                        },
+                        leadingIcon: const Icon(Icons.upload_file_outlined),
+                        child: const Text('Import Payroll CSV'),
+                      ),
+                      MenuItemButton(
+                        onPressed: selectedPayrollBranchId == null &&
+                                visiblePayrollRecords.isNotEmpty
+                            ? () => _exportPayrollBranchesPdf(
+                                  visiblePayrollRecords,
+                                  branchNames,
+                                )
+                            : null,
+                        leadingIcon: const Icon(Icons.picture_as_pdf_outlined),
+                        child: const Text('Save All Branches PDF'),
+                      ),
+                      MenuItemButton(
+                        onPressed: selectedPayrollBranchId == null &&
+                                visiblePayrollRecords.isNotEmpty
+                            ? () => _exportPayrollAllBranchesExcel(
+                                  visiblePayrollRecords,
+                                  branchNames,
+                                )
+                            : null,
+                        leadingIcon: const Icon(Icons.table_view_outlined),
+                        child: const Text('Export All Branches Excel'),
+                      ),
+                    ]),
+                  ],
+                ),
+                const SizedBox(height: 26),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E5EB)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Branch',
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 360),
+                            child: DropdownButtonFormField<String>(
+                              key: ValueKey(selectedPayrollBranchId),
+                              initialValue:
+                                  branchIds.contains(selectedPayrollBranchId)
+                                      ? selectedPayrollBranchId
+                                      : '',
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Filter payroll by branch',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: [
+                                const DropdownMenuItem(
+                                    value: '', child: Text('All branches')),
+                                ...branchIds.map((id) => DropdownMenuItem(
+                                    value: id,
+                                    child: Text(branchNames[id] ?? id))),
+                              ],
+                              onChanged: (value) => setState(() =>
+                                  selectedPayrollBranchId =
+                                      value == '' ? null : value),
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: selectedPayrollBranchId == null
+                                ? null
+                                : () async {
+                                    final id = selectedPayrollBranchId!;
+                                    await _showPayrollEmployeeSelection(
+                                      branchName: branchNames[id] ?? id,
+                                      employees: branchGroups[id] ?? [],
+                                      month: selectedPayrollMonth,
+                                    );
+                                    if (mounted) setState(() {});
+                                  },
+                            icon: const Icon(Icons.group_add_outlined),
+                            label: const Text('Select Employees'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                          'Choose a branch to filter payroll or select employees for generation.',
+                          style: TextStyle(color: Colors.black54)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = constraints.maxWidth >= 900
+                        ? 3
+                        : constraints.maxWidth >= 520
+                            ? 2
+                            : 1;
+                    final cardWidth =
+                        (constraints.maxWidth - (16 * (columns - 1))) / columns;
+                    return Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: [
+                        SizedBox(
+                          width: cardWidth,
+                          child: _payrollSummaryCard(
+                            'Gross Payroll · Selected Month',
+                            'RM ${totalPayroll.toStringAsFixed(2)}',
+                            Icons.account_balance_wallet_outlined,
+                            const Color(0xFF2D55D8),
+                          ),
+                        ),
+                        SizedBox(
+                          width: cardWidth,
+                          child: _payrollSummaryCard(
+                            'Eligible Employees · Selected Branch',
+                            employees
+                                .where((employee) =>
+                                    PayrollMonthScope.activeInMonth(
+                                        employee, selectedPayrollMonth) &&
+                                    (selectedPayrollBranchId == null ||
+                                        _payrollBranchIdFromEmployee(
+                                                employee) ==
+                                            selectedPayrollBranchId))
+                                .length
+                                .toString(),
+                            Icons.people_outline,
+                            const Color(0xFF16A34A),
+                          ),
+                        ),
+                        SizedBox(
+                          width: cardWidth,
+                          child: _payrollSummaryCard(
+                            'Employees with Payroll · Selected Month',
+                            visiblePayrollRecords
+                                .map((row) =>
+                                    _normalizeBranchValue(row['employee_id']))
+                                .toSet()
+                                .length
+                                .toString(),
+                            Icons.pending_actions_outlined,
+                            const Color(0xFFF59E0B),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 30),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E5EB)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Payroll Management',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${DateFormat('MMMM yyyy').format(selectedPayrollMonth)} · '
+                        '${selectedPayrollBranchId == null ? 'All branches' : branchNames[selectedPayrollBranchId] ?? selectedPayrollBranchId}',
+                        style: const TextStyle(color: Colors.black54),
+                      ),
+                      const SizedBox(height: 20),
+                      if (visiblePayrollRecords.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 40,
+                            horizontal: 20,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Column(
+                            children: [
+                              const Icon(
+                                Icons.payments_outlined,
+                                size: 48,
+                                color: Colors.black38,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No payroll records for ${DateFormat('MMMM yyyy').format(selectedPayrollMonth)}',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Select a branch and generate payroll to get started.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.black54),
+                              ),
+                              const SizedBox(height: 16),
+                              FilledButton.icon(
+                                onPressed: _showGenerateAttendancePayrollDialog,
+                                icon: const Icon(Icons.calculate_outlined),
+                                label: const Text('Generate Payroll'),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        _payrollOverviewTable(
+                            visiblePayrollRecords, employeeById),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+// ============================================================================
+// PAYROLL SUMMARY CARD
+// ============================================================================
+
+  Widget _payrollSummaryCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E5EB)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 23,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.black54,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// ============================================================================
+// PAYROLL TOTAL
+// ============================================================================
+
+  double _payrollSalaryBase(Map<String, dynamic> payroll) {
+    final fwSalary = _payrollNumber(payroll['fw_salary']);
+    if (fwSalary != 0) return fwSalary;
+    return _payrollNumber(payroll['basic_salary']);
+  }
+
+  double _payrollTotalEarnings(Map<String, dynamic> payroll) =>
+      SavedPayrollAmounts.fromRow(payroll).gross;
+
+  double _epfReportSalary(Map<String, dynamic> payroll) {
+    final basicSalary = _payrollNumber(
+      payroll['basic_salary'] ?? payroll['basicSalary'],
+    );
+    final unpaidDeduction = _payrollNumber(
+      payroll['unpaid_deduction'] ?? payroll['unpaidDeduction'],
+    );
+    final lateDeduction = _payrollNumber(
+      payroll['late_deduction'] ?? payroll['lateDeduction'],
+    );
+    return math
+        .max(0, basicSalary - unpaidDeduction - lateDeduction)
+        .toDouble();
+  }
+
+// ============================================================================
+// PAYROLL CSV IMPORT
+// ============================================================================
+
+  Future<void> _importPayrollCsv() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+
+      final file = result.files.single;
+      final bytes = file.bytes;
+
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception(
+          'Unable to read the selected CSV file.',
+        );
+      }
+
+      final csvText = utf8.decode(
+        bytes,
+        allowMalformed: true,
+      );
+
+      final rows = const CsvToListConverter(
+        shouldParseNumbers: false,
+      ).convert(csvText);
+
+      if (rows.isEmpty) {
+        throw Exception(
+          'The CSV file is empty.',
+        );
+      }
+
+      final headers = rows.first
+          .map(
+            (value) => value.toString().replaceFirst('\uFEFF', '').trim(),
+          )
+          .toList();
+
+      if (headers.isEmpty) {
+        throw Exception(
+          'The CSV file has no headers.',
+        );
+      }
+
+      String databaseColumnName(
+        String header,
+      ) {
+        final value = header.trim();
+
+        const mappings = {
+          'id': 'id',
+          'employeeId': 'employee_id',
+          'employeeID': 'employee_id',
+          'employee_id': 'employee_id',
+          'period': 'period',
+          'month': 'period',
+          'basicSalary': 'basic_salary',
+          'basic_salary': 'basic_salary',
+          'fwSalary': 'fw_salary',
+          'fw_salary': 'fw_salary',
+          'FW_salary': 'fw_salary',
+          'FW SALARY': 'fw_salary',
+          'elaunKedatangan': 'elaun_kedatangan',
+          'elaun_kedatangan': 'elaun_kedatangan',
+          'elaunPerkhidmatan': 'elaun_perkhidmatan',
+          'elaun_perkhidmatan': 'elaun_perkhidmatan',
+          'elaunKerajinan': 'elaun_kerajinan',
+          'elaun_kerajinan': 'elaun_kerajinan',
+          'elaunMakanan': 'elaun_makanan',
+          'elaun_makanan': 'elaun_makanan',
+          'overtime': 'overtime',
+          'bonus': 'bonus',
+          'commission': 'commission',
+          'otherEarnings': 'other_earnings',
+          'other_earnings': 'other_earnings',
+          'cutiUmum': 'cuti_umum',
+          'cuti_umum': 'cuti_umum',
+          'epfEmployee': 'epf_employee',
+          'epf_employee': 'epf_employee',
+          'socsoEmployee': 'socso_employee',
+          'socso_employee': 'socso_employee',
+          'eisEmployee': 'eis_employee',
+          'eis_employee': 'eis_employee',
+          'pcb': 'pcb',
+          'zakat': 'zakat',
+          'epfEmployer': 'epf_employer',
+          'epf_employer': 'epf_employer',
+          'socsoEmployer': 'socso_employer',
+          'socso_employer': 'socso_employer',
+          'eisEmployer': 'eis_employer',
+          'eis_employer': 'eis_employer',
+          'newIcNo': 'new_ic_no',
+          'new_ic_no': 'new_ic_no',
+          'bankCode': 'bank_code',
+          'bank_code': 'bank_code',
+          'bankAccount': 'bank_account',
+          'bank_account': 'bank_account',
+          'remarks': 'remarks',
+        };
+
+        if (mappings.containsKey(value)) {
+          return mappings[value]!;
+        }
+
+        return value
+            .replaceAllMapped(
+              RegExp(
+                r'([a-z0-9])([A-Z])',
+              ),
+              (match) => '${match.group(1)}_'
+                  '${match.group(2)}',
+            )
+            .toLowerCase();
+      }
+
+      double parseNumber(
+        String value,
+      ) {
+        if (value.trim().isEmpty) {
+          return 0;
+        }
+
+        final cleaned = value
+            .replaceAll(',', '')
+            .replaceAll('RM', '')
+            .replaceAll('rm', '')
+            .trim();
+
+        return double.tryParse(
+              cleaned,
+            ) ??
+            0;
+      }
+
+      const numericColumns = {
+        'basic_salary',
+        'elaun_kedatangan',
+        'elaun_perkhidmatan',
+        'elaun_kerajinan',
+        'elaun_makanan',
+        'overtime',
+        'bonus',
+        'commission',
+        'other_earnings',
+        'cuti_umum',
+        'epf_employee',
+        'socso_employee',
+        'eis_employee',
+        'pcb',
+        'zakat',
+        'epf_employer',
+        'socso_employer',
+        'eis_employer',
+      };
+
+      final payrollRows = <Map<String, dynamic>>[];
+
+      final usedIds = <String>{};
+
+      for (var i = 1; i < rows.length; i++) {
+        final row = rows[i];
+
+        if (row.isEmpty) {
+          continue;
+        }
+
+        final record = <String, dynamic>{};
+
+        for (var columnIndex = 0; columnIndex < headers.length; columnIndex++) {
+          if (columnIndex >= row.length) {
+            continue;
+          }
+
+          final originalHeader = headers[columnIndex];
+
+          if (originalHeader.isEmpty) {
+            continue;
+          }
+
+          final column = databaseColumnName(
+            originalHeader,
+          );
+
+          if (column.isEmpty) {
+            continue;
+          }
+
+          final rawValue = row[columnIndex].toString().trim();
+
+          if (numericColumns.contains(
+            column,
+          )) {
+            record[column] = parseNumber(rawValue);
+          } else if (rawValue.isNotEmpty) {
+            record[column] = rawValue;
+          }
+        }
+
+        final employeeId = (record['employee_id'] ?? '').toString().trim();
+
+        if (employeeId.isEmpty) {
+          continue;
+        }
+
+        final period = (record['period'] ?? '').toString().trim();
+
+        if (period.isEmpty) {
+          throw Exception(
+            'Missing period for employee $employeeId '
+            'on CSV row ${i + 1}.',
+          );
+        }
+
+        // payroll.id is required by your schema.
+        //
+        // If the CSV does not provide an ID, generate one.
+        String payrollId = (record['id'] ?? '').toString().trim();
+
+        if (payrollId.isEmpty) {
+          payrollId = '${employeeId}_$period';
+        }
+
+        // Prevent duplicate IDs inside the same CSV.
+        if (usedIds.contains(payrollId)) {
+          throw Exception(
+            'Duplicate payroll ID "$payrollId" '
+            'found in CSV row ${i + 1}.',
+          );
+        }
+
+        usedIds.add(payrollId);
+
+        record['id'] = payrollId;
+        record['employee_id'] = employeeId;
+        record['period'] = period;
+        record['is_published'] = false;
+        record['published_at'] = null;
+        record['published_by'] = null;
+
+        payrollRows.add(record);
+      }
+
+      if (payrollRows.isEmpty) {
+        throw Exception(
+          'No valid payroll records were found in the CSV file.\n'
+          'employeeId/employee_id and period are required.',
+        );
+      }
+
+      // ------------------------------------------------------------------------
+      // Verify employee IDs.
+      // ------------------------------------------------------------------------
+
+      final employeeIds = payrollRows
+          .map(
+            (row) => row['employee_id'].toString(),
+          )
+          .where(
+            (id) => id.isNotEmpty,
+          )
+          .toSet()
+          .toList();
+
+      final existingEmployees = await SupabaseService.database
+          .from('employees')
+          .select(
+            'employee_id',
+          )
+          .inFilter(
+            'employee_id',
+            employeeIds,
+          );
+
+      final existingIds = existingEmployees
+          .map<String>(
+            (row) => row['employee_id'].toString(),
+          )
+          .toSet();
+
+      final missingEmployees = employeeIds
+          .where(
+            (id) => !existingIds.contains(
+              id,
+            ),
+          )
+          .toList();
+
+      if (missingEmployees.isNotEmpty) {
+        throw Exception(
+          'These employee IDs do not exist:\n'
+          '${missingEmployees.join(', ')}',
+        );
+      }
+
+      if (!mounted) return;
+
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const AlertDialog(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(),
+              ),
+              SizedBox(width: 20),
+              Expanded(
+                child: Text(
+                  'Importing payroll records...',
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      try {
+        // IMPORTANT:
+        //
+        // Your table has:
+        // UNIQUE(employee_id, period)
+        //
+        // Therefore UPSERT is safer than INSERT.
+        //
+        // It allows an imported CSV to update the payroll
+        // for an employee/month instead of failing with
+        // duplicate employee + period.
+        await SupabaseService.database.from('payroll').upsert(
+              payrollRows,
+              onConflict: 'employee_id,period',
+            );
+        _invalidatePayrollReportCaches();
+
+        if (!mounted) return;
+
+        Navigator.of(context).pop();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${payrollRows.length} payroll record(s) imported successfully.',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        setState(() {});
+      } catch (e) {
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+
+        rethrow;
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Payroll CSV import failed: $e',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+// ============================================================================
+// PAYROLL CSV IMPORT PAGE
+// ============================================================================
+
+  Widget _importPayrollPage() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Import Payroll',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF172033),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Upload a CSV file to import or update payroll records.',
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 28),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.grey.shade200,
+              ),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF0FF),
+                    borderRadius: BorderRadius.circular(
+                      40,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.upload_file_outlined,
+                    size: 40,
+                    color: Color(0xFF2D55D8),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Import Payroll CSV',
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Select a CSV file containing payroll data.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.black54,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: _importPayrollCsv,
+                  icon: const Icon(
+                    Icons.folder_open_outlined,
+                  ),
+                  label: const Text(
+                    'Choose CSV File',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(
+                      0xFF2D55D8,
+                    ),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 15,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        10,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(
+                    16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(
+                      10,
+                    ),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Supported CSV columns',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      SelectableText(
+                        'id,employeeId,period,basicSalary,'
+                        'elaunKedatangan,elaunPerkhidmatan,'
+                        'elaunKerajinan,elaunMakanan,overtime,bonus,commission,'
+                        'otherEarnings,cutiUmum,epfEmployee,'
+                        'socsoEmployee,eisEmployee,pcb,zakat,'
+                        'epfEmployer,socsoEmployer,eisEmployer,'
+                        'newIcNo,bankCode,bankAccount,remarks',
+                        style: TextStyle(
+                          fontSize: 13,
+                        ),
+                      ),
+                      SizedBox(height: 14),
+                      Text(
+                        'Required:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'employeeId and period',
+                        style: TextStyle(
+                          color: Colors.black54,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      Text(
+                        'If id is not supplied, the application generates '
+                        'one using employeeId_period.',
+                        style: TextStyle(
+                          color: Colors.black54,
+                          height: 1.4,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      Text(
+                        'Existing employee + period records are updated '
+                        'automatically.',
+                        style: TextStyle(
+                          color: Colors.black54,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// ============================================================================
+// REPORTS
+// ============================================================================
+
+  Widget _reportsPage() {
+    final reportPayroll = service.payroll
+        .where((record) =>
+            record.period.year == selectedReportMonth.year &&
+            record.period.month == selectedReportMonth.month)
+        .toList();
+    final reportAttendance = service.attendance
+        .where((record) =>
+            record.date.year == selectedReportMonth.year &&
+            record.date.month == selectedReportMonth.month)
+        .toList();
+    final reportNewJoiners = service.employeesDemo.where((employee) {
+      final date = employee.joiningDate;
+      return date != null &&
+          date.year == selectedReportMonth.year &&
+          date.month == selectedReportMonth.month;
+    }).length;
+    final vacationEmployees = reportAttendance
+        .where((record) => record.status.trim().toLowerCase() == 'leave')
+        .map((record) => record.employeeId)
+        .toSet()
+        .length;
+    final double gross = reportPayroll.fold<double>(
+      0,
+      (
+        sum,
+        p,
+      ) =>
+          sum + p.totalEarnings,
+    );
+
+    final double net = reportPayroll.fold<double>(
+      0,
+      (
+        sum,
+        p,
+      ) =>
+          sum + p.netPay,
+    );
+
+    final double deductions = reportPayroll.fold<double>(
+      0,
+      (
+        sum,
+        p,
+      ) =>
+          sum + p.totalDeductions,
+    );
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Reports',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Manage employee requests and branch reports.',
+            style: TextStyle(
+              color: Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 20),
+          AdminReportsMenu(onNavigate: changePage),
+          const SizedBox(height: 24),
+          _monthYearSelector(
+            value: selectedReportMonth,
+            onChanged: (value) => setState(() => selectedReportMonth = value),
+          ),
+          const SizedBox(height: 14),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: _panel(
+              'Payroll Report',
+              Column(
+                children: [
+                  _reportRow(
+                    'Employees',
+                    service.employeesDemo.length.toString(),
+                  ),
+                  _reportRow(
+                    'Active Employees',
+                    service.employeesDemo
+                        .where(
+                          (e) => e.isActive,
+                        )
+                        .length
+                        .toString(),
+                  ),
+                  _reportRow(
+                    'Payroll Records',
+                    reportPayroll.length.toString(),
+                  ),
+                  _reportRow(
+                    'Attendance Records',
+                    reportAttendance.length.toString(),
+                  ),
+                  _reportRow(
+                    'Departments',
+                    _departmentCount().toString(),
+                  ),
+                  _reportRow(
+                    'Branches',
+                    service.branches.length.toString(),
+                  ),
+                  _reportRow(
+                    'Vacation Employees',
+                    vacationEmployees.toString(),
+                  ),
+                  _reportRow(
+                    'New Joiners',
+                    reportNewJoiners.toString(),
+                  ),
+                  _reportRow(
+                    'Gross Payroll',
+                    _money(gross),
+                  ),
+                  _reportRow(
+                    'Total Deductions',
+                    _money(deductions),
+                  ),
+                  _reportRow(
+                    'Net Payroll',
+                    _money(net),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// ============================================================================
+// SETTINGS
+// ============================================================================
+
+  Widget _settingsPage() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: _panel(
+        'Settings',
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Company Payroll',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Administrator has full access to employee, attendance '
+              'and payroll data.',
+            ),
+            const SizedBox(height: 20),
+            const Divider(),
+            const SizedBox(height: 10),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(
+                backgroundColor: Color(0xFFEAF0FF),
+                child: Icon(
+                  Icons.admin_panel_settings,
+                  color: Color(0xFF2D55D8),
+                ),
+              ),
+              title: const Text(
+                'Administrator Access',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              subtitle: const Text(
+                'Full system access',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+// ============================================================================
+// PAYROLL DETAIL
+// ============================================================================
+
+  void _showPayroll(
+    PayrollRecord payroll,
+  ) {
+    final employee = service.findEmployee(
+      payroll.employeeId,
+    );
+
+    showDialog<void>(
+      context: context,
+      builder: (
+        dialogContext,
+      ) {
+        return AlertDialog(
+          title: Text(
+            '${employee?.name ?? payroll.employeeId} Payroll',
+          ),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Employee ID: '
+                    '${payroll.employeeId}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    'Period: '
+                    '${DateFormat('MMMM yyyy').format(payroll.period)}',
+                  ),
+                  const Divider(
+                    height: 25,
+                  ),
+                  _detail(
+                    'Basic Salary',
+                    _money(
+                      payroll.basicSalary,
+                    ),
+                  ),
+                  _detail(
+                    'FW Salary',
+                    _money(
+                      payroll.fwSalary,
+                    ),
+                  ),
+                  _detail(
+                    'Food Allowance',
+                    _money(
+                      payroll.foodAllowance,
+                    ),
+                  ),
+                  _detail(
+                    'Other Allowance',
+                    _money(
+                      payroll.otherAllowance,
+                    ),
+                  ),
+                  _detail(
+                    'Overtime',
+                    _money(
+                      payroll.overtime,
+                    ),
+                  ),
+                  _detail(
+                    'Bonus',
+                    _money(
+                      payroll.bonus,
+                    ),
+                  ),
+                  const Divider(),
+                  _detail(
+                    'EPF Employee',
+                    _money(
+                      payroll.epfEmployee,
+                    ),
+                  ),
+                  _detail(
+                    'SOCSO Employee',
+                    _money(
+                      payroll.socsoEmployee,
+                    ),
+                  ),
+                  _detail(
+                    'EIS Employee',
+                    _money(
+                      payroll.eisEmployee,
+                    ),
+                  ),
+                  const Divider(),
+                  _detail(
+                    'Gross',
+                    _money(
+                      payroll.totalEarnings,
+                    ),
+                  ),
+                  _detail(
+                    'Deductions',
+                    _money(
+                      payroll.totalDeductions,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(
+                      14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(
+                        0xFFEAF8F1,
+                      ),
+                      borderRadius: BorderRadius.circular(
+                        10,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'NET PAY',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: Color(
+                                0xFF15965D,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Text(
+                          _money(
+                            payroll.netPay,
+                          ),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: Color(
+                              0xFF15965D,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                );
+              },
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+// ============================================================================
+// PAYROLL TABLE FROM SUPABASE
+// ============================================================================
+
+  Widget _supabasePayrollTable(
+    List<Map<String, dynamic>> records,
+  ) {
+    if (records.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(
+          child: Text(
+            'No payroll records found.',
+            style: TextStyle(
+              color: Colors.black54,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ============================================================
+    // COLUMNS TO HIDE
+    // ============================================================
+
+    const hiddenColumns = {
+      'id',
+      'bonus',
+      'commission',
+      'other_earnings',
+      'new_ic_no',
+      'bank_code',
+      'bank_account',
+      'remarks',
+      'created_at',
+      'updated_at',
+    };
+
+    // ============================================================
+    // GET COLUMNS FROM SUPABASE
+    // BUT EXCLUDE HIDDEN COLUMNS
+    // ============================================================
+
+    final columns = <String>[];
+
+    for (final record in records) {
+      for (final key in record.keys) {
+        if (hiddenColumns.contains(key)) {
+          continue;
+        }
+
+        if (!columns.contains(key)) {
+          columns.add(key);
+        }
+      }
+    }
+
+    // ============================================================
+    // FRIENDLY COLUMN NAMES
+    // ============================================================
+
+    String columnTitle(String column) {
+      const titles = {
+        'employee_id': 'Employee ID',
+        'branch_id': 'Branch ID',
+        'branch_name': 'Branch',
+        'period': 'Period',
+        'basic_salary': 'Basic Salary',
+        'fw_salary': 'FW Salary',
+        'elaun_kedatangan': 'Elaun Kedatangan',
+        'elaun_perkhidmatan': 'Elaun Perkhidmatan',
+        'elaun_kerajinan': 'Elaun Kerajinan',
+        'elaun_makanan': 'Elaun Makanan',
+        'overtime': 'Overtime',
+        'cuti_umum': 'Cuti Umum',
+        'late_deduction': 'Late Deduction',
+        'unpaid_deduction': 'Unpaid Deduction',
+        'epf_employee': 'EPF Employee',
+        'socso_employee': 'SOCSO Employee',
+        'eis_employee': 'EIS Employee',
+        'pcb': 'PCB',
+        'zakat': 'Zakat',
+        'advance': 'Advance',
+        'epf_employer': 'EPF Employer',
+        'socso_employer': 'SOCSO Employer',
+        'eis_employer': 'EIS Employer',
+      };
+
+      if (titles.containsKey(column)) {
+        return titles[column]!;
+      }
+
+      return column.replaceAll('_', ' ').split(' ').map(
+        (word) {
+          if (word.isEmpty) {
+            return word;
+          }
+
+          return word[0].toUpperCase() + word.substring(1);
+        },
+      ).join(' ');
+    }
+
+    // ============================================================
+    // MONEY COLUMNS
+    // ============================================================
+
+    const moneyColumns = {
+      'basic_salary',
+      'fw_salary',
+      'elaun_kedatangan',
+      'elaun_perkhidmatan',
+      'elaun_kerajinan',
+      'elaun_makanan',
+      'overtime',
+      'cuti_umum',
+      'late_deduction',
+      'unpaid_deduction',
+      'epf_employee',
+      'socso_employee',
+      'eis_employee',
+      'pcb',
+      'zakat',
+      'advance',
+      'epf_employer',
+      'socso_employer',
+      'eis_employer',
+    };
+
+    // ============================================================
+    // FORMAT VALUES
+    // ============================================================
+
+    String displayValue(
+      String column,
+      dynamic value,
+    ) {
+      if (value == null) {
+        return '';
+      }
+
+      if (value is bool) {
+        return value ? 'Yes' : 'No';
+      }
+
+      if (column == 'period') {
+        return _formatPayrollPeriod(value);
+      }
+
+      if (moneyColumns.contains(column)) {
+        final amount = _payrollNumber(value);
+        return _money(amount);
+      }
+
+      return value.toString();
+    }
+
+    // ============================================================
+    // DATA TABLE
+    // ============================================================
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: Colors.blueGrey.withValues(alpha: .15),
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          headingRowColor: WidgetStateProperty.all(
+            const Color(0xFFF8FAFC),
+          ),
+
+          headingRowHeight: 52,
+
+          dataRowMinHeight: 48,
+          dataRowMaxHeight: 60,
+
+          columnSpacing: 28,
+
+          horizontalMargin: 20,
+
+          border: TableBorder(
+            horizontalInside: BorderSide(
+              color: Colors.blueGrey.withValues(alpha: .12),
+            ),
+          ),
+
+          // ========================================================
+          // HEADERS
+          // ========================================================
+
+          columns: columns.map(
+            (column) {
+              return DataColumn(
+                label: Text(
+                  columnTitle(column),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              );
+            },
+          ).toList(),
+
+          // ========================================================
+          // ROWS
+          // ========================================================
+
+          rows: records.map(
+            (record) {
+              return DataRow(
+                cells: columns.map(
+                  (column) {
+                    final value = record[column];
+
+                    final text = displayValue(
+                      column,
+                      value,
+                    );
+
+                    TextStyle? style;
+
+                    if (column == 'employee_id') {
+                      style = const TextStyle(
+                        fontWeight: FontWeight.w600,
+                      );
+                    }
+
+                    if (column == 'period') {
+                      style = const TextStyle(
+                        fontWeight: FontWeight.w500,
+                      );
+                    }
+
+                    return DataCell(
+                      Text(
+                        text,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: style,
+                      ),
+                    );
+                  },
+                ).toList(),
+              );
+            },
+          ).toList(),
+        ),
+      ),
+    );
+  }
+// ============================================================================
+// PAYROLL EXCEL EXPORT
+// ============================================================================
+
+  // Retained for branch exports; the toolbar only exposes all-branches exports.
+  // ignore: unused_element
+  Future<void> _exportPayrollBranchExcel(
+    List<Map<String, dynamic>> records,
+    String branchId,
+    String branchName,
+  ) async {
+    if (records.isEmpty) {
+      _message('No payroll records for the selected branch and month.');
+      return;
+    }
+
+    try {
+      // --------------------------------------------------------------------------
+      // 1. Load the user's exact Excel template.
+      // --------------------------------------------------------------------------
+      // Copy the supplied 111111.xlsx into the Flutter project's assets folder as:
+      //     assets/payroll_export_template.xlsx
+      // The template contains the original logo, merged cells, colours, borders,
+      // column widths, footer and page layout.
+      final ByteData templateData = await rootBundle.load(
+        'assets/payroll_export_template.xlsx',
+      );
+
+      final templateBytes = templateData.buffer.asUint8List(
+        templateData.offsetInBytes,
+        templateData.lengthInBytes,
+      );
+
+      final compatibleTemplateBytes = _normalizeExcelTemplate(templateBytes);
+      final excel = xls.Excel.decodeBytes(compatibleTemplateBytes);
+      final sheet = excel['Sheet1'];
+
+      // --------------------------------------------------------------------------
+      // 2. Load employee information and salary-default information.
+      // --------------------------------------------------------------------------
+      final employeeIds = records
+          .map((row) => _normalizeBranchValue(row['employee_id']))
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+
+      final employeeResponse = await SupabaseService.database
+          .from('employees')
+          .select()
+          .inFilter('employee_id', employeeIds);
+
+      final employeeMap = <String, Map<String, dynamic>>{};
+      for (final row in List<Map<String, dynamic>>.from(employeeResponse)) {
+        final id = _normalizeBranchValue(row['employee_id']);
+        if (id.isNotEmpty) {
+          employeeMap[id] = Map<String, dynamic>.from(row);
+        }
+      }
+
+      records = _visibleMonthPayroll(
+        records,
+        employeeMap.values,
+        selectedPayrollMonth,
+      );
+      if (records.isEmpty) {
+        _message('No eligible employee payroll for the selected month.');
+        return;
+      }
+
+      final salaryResponse = await SupabaseService.database
+          .from('employee_salary_defaults')
+          .select()
+          .inFilter('employee_id', employeeIds);
+
+      final salaryMap = <String, Map<String, dynamic>>{};
+      for (final row in List<Map<String, dynamic>>.from(salaryResponse)) {
+        final id = _normalizeBranchValue(row['employee_id']);
+        if (id.isNotEmpty) {
+          salaryMap[id] = Map<String, dynamic>.from(row);
+        }
+      }
+
+      // --------------------------------------------------------------------------
+      // 3. Helpers for the report template.
+      // --------------------------------------------------------------------------
+      dynamic firstValue(
+        Map<String, dynamic> row,
+        List<String> keys,
+      ) {
+        for (final key in keys) {
+          final value = row[key];
+          if (value != null && value.toString().trim().isNotEmpty) {
+            return value;
+          }
+        }
+        return null;
+      }
+
+      String textValue(dynamic value) {
+        if (value == null) return '';
+        return value.toString().trim();
+      }
+
+      String dateText(dynamic value) {
+        if (value == null) return '';
+
+        if (value is DateTime) {
+          return DateFormat('dd/MM/yyyy').format(value);
+        }
+
+        final text = value.toString().trim();
+        if (text.isEmpty) return '';
+
+        final parsed = DateTime.tryParse(text);
+        if (parsed != null) {
+          return DateFormat('dd/MM/yyyy').format(parsed);
+        }
+
+        return text;
+      }
+
+      double money(dynamic value) => _payrollNumber(value);
+
+      // --------------------------------------------------------------------------
+      // 4. Put the selected branch/month into the template header.
+      // --------------------------------------------------------------------------
+      final monthText = DateFormat('MMM-yyyy').format(selectedPayrollMonth);
+
+      sheet.cell(xls.CellIndex.indexByString('A1')).value =
+          xls.TextCellValue('PENYATA GAJI');
+      excel.unMerge('Sheet1', 'L2:Q2');
+      sheet.cell(xls.CellIndex.indexByString('L2')).value = null;
+      sheet.merge(
+        xls.CellIndex.indexByString('M2'),
+        xls.CellIndex.indexByString('U2'),
+      );
+      final branchHeaderCell = sheet.cell(xls.CellIndex.indexByString('M2'));
+      branchHeaderCell.value = xls.TextCellValue(
+        '${branchName.toUpperCase()} (PEKERJA TEMPATAN)',
+      );
+      branchHeaderCell.cellStyle =
+          (branchHeaderCell.cellStyle ?? xls.CellStyle()).copyWith(
+        boldVal: true,
+        fontSizeVal: 20,
+        fontColorHexVal: xls.ExcelColor.fromHexString('FF1F4E78'),
+        horizontalAlignVal: xls.HorizontalAlign.Center,
+        verticalAlignVal: xls.VerticalAlign.Center,
+      );
+      sheet.setRowHeight(1, 32);
+      final monthCell = sheet.cell(
+        xls.CellIndex.indexByString('A3'),
+      );
+      sheet.merge(
+        xls.CellIndex.indexByString('A3'),
+        xls.CellIndex.indexByString('T3'),
+        customValue: xls.TextCellValue(monthText),
+      );
+      monthCell.cellStyle = (monthCell.cellStyle ?? xls.CellStyle()).copyWith(
+        boldVal: true,
+        fontSizeVal: 16,
+        horizontalAlignVal: xls.HorizontalAlign.Center,
+      );
+
+      // --------------------------------------------------------------------------
+      // 5. Make enough formatted employee rows.
+      // --------------------------------------------------------------------------
+      // Original template has data rows 5..52. If a branch has more than 48
+      // employees, insert additional rows immediately before TOTAL AMOUNT.
+      const firstDataRow = 5;
+      const templateDataRows = 48;
+      final extraRows = records.length > templateDataRows
+          ? records.length - templateDataRows
+          : 0;
+
+      // Save the style of the last normal data row before inserting rows.
+      final sourceStyles = <xls.CellStyle?>[];
+      for (var column = 0; column < 20; column++) {
+        sourceStyles.add(
+          sheet
+              .cell(
+                xls.CellIndex.indexByColumnRow(
+                  columnIndex: column,
+                  rowIndex: firstDataRow - 1 + templateDataRows - 1,
+                ),
+              )
+              .cellStyle,
+        );
+      }
+
+      for (var i = 0; i < extraRows; i++) {
+        // Excel row 53 is index 52 (zero-based) in the supplied template.
+        sheet.insertRow(52);
+
+        for (var column = 0; column < 20; column++) {
+          final newCell = sheet.cell(
+            xls.CellIndex.indexByColumnRow(
+              columnIndex: column,
+              rowIndex: 52,
+            ),
+          );
+
+          final style = sourceStyles[column];
+          if (style != null) {
+            newCell.cellStyle = style.copyWith();
+          }
+        }
+      }
+
+      // If the branch has fewer employees than the template's 48 data rows,
+      // remove the unused rows so TOTAL AMOUNT and the footer sit immediately
+      // after the actual branch employee list.
+      final rowsToRemove = records.length < templateDataRows
+          ? templateDataRows - records.length
+          : 0;
+
+      for (var i = 0; i < rowsToRemove; i++) {
+        // lastDataRow is still based on the final employee row. The row directly
+        // after it is the first unused template row.
+        final removeIndex = firstDataRow + records.length - 1;
+        sheet.removeRow(removeIndex);
+      }
+
+      // --------------------------------------------------------------------------
+      // 6. Clear the template's old employee values.
+      // --------------------------------------------------------------------------
+      final lastDataRow = firstDataRow + records.length - 1;
+      for (var row = firstDataRow; row <= lastDataRow; row++) {
+        for (var column = 0; column < 20; column++) {
+          sheet
+              .cell(
+                xls.CellIndex.indexByColumnRow(
+                  columnIndex: column,
+                  rowIndex: row - 1,
+                ),
+              )
+              .value = null;
+        }
+      }
+
+      // --------------------------------------------------------------------------
+      // 7. Write branch payroll rows using the exact template columns.
+      // --------------------------------------------------------------------------
+      final sortedRecords = List<Map<String, dynamic>>.from(records)
+        ..sort((a, b) => _comparePayrollExportRecords(a, b, employeeMap));
+
+      final paymentSummary = SalaryTransferSummary();
+      final paymentTotals = paymentSummary.totals;
+      final columnTotals = List<double>.filled(20, 0);
+      final tableBorder = xls.Border(borderStyle: xls.BorderStyle.Thin);
+      const exportBodyFontSize = 11;
+      const exportTotalFontSize = 13;
+      final moneyNumberFormat = xls.NumFormat.custom(
+        formatCode: '#,##0.00;-#,##0.00;-',
+      );
+      for (var column = 0; column < 20; column++) {
+        final headerCell = sheet.cell(
+          xls.CellIndex.indexByColumnRow(
+            columnIndex: column,
+            rowIndex: firstDataRow - 2,
+          ),
+        );
+        headerCell.cellStyle = _excelHeaderStyle(headerCell.cellStyle);
+      }
+      for (var index = 0; index < sortedRecords.length; index++) {
+        final payroll = sortedRecords[index];
+        final rowNumber = firstDataRow + index;
+        sheet.setRowHeight(rowNumber - 1, 18);
+        final employeeId = _normalizeBranchValue(payroll['employee_id']);
+        final employee = employeeMap[employeeId] ?? <String, dynamic>{};
+
+        final basicSalary = money(payroll['basic_salary']);
+        final fwSalary = money(payroll['fw_salary']);
+        final totalSalary = fwSalary != 0 ? fwSalary : basicSalary;
+
+        final elaunKedatangan = money(payroll['elaun_kedatangan']);
+        final elaunPerkhidmatan = money(payroll['elaun_perkhidmatan']);
+        final elaunKerajinan = money(payroll['elaun_kerajinan']);
+        final overtime = money(payroll['overtime']);
+        final cutiUmum = money(payroll['cuti_umum']);
+
+        // The template calls this column "JUMLAH". It is the earnings total.
+        final jumlah = SavedPayrollAmounts.fromRow(payroll).gross;
+
+        final unpaidDeduction = money(
+          firstValue(
+            payroll,
+            const [
+              'unpaid_deduction',
+              'cuti_tanpa_gaji',
+              'cuti_tanpa_gaji_deduction',
+            ],
+          ),
+        );
+
+        final epf = money(payroll['epf_employee']);
+        final socso = money(payroll['socso_employee']);
+        final eis = money(payroll['eis_employee']);
+
+        // M01 / CUTI TANPA GAJI contains BOTH unpaid and late deduction.
+        final lateDeduction = money(payroll['late_deduction']);
+        final cutiTanpaGaji = unpaidDeduction + lateDeduction;
+
+        // POTONGAN contains only PCB + Zakat. Late deduction is already in M01.
+        final otherDeductions = money(payroll['pcb']) +
+            money(payroll['zakat']) +
+            money(payroll['advance']);
+
+        final net = SavedPayrollAmounts.finalNetPay(payroll);
+
+        final values = <dynamic>[
+          index + 1,
+          employeeId,
+          dateText(firstValue(employee, const [
+            'joining_date',
+            'joiningDate',
+            'date_joined',
+            'dateJoined',
+            'tarikh_masuk_kerja',
+            'tarikh_masuk',
+          ])),
+          _salaryIncrementText(
+                employeeId,
+                payroll['period'],
+                defaultIncrementDetails: firstValue(
+                  salaryMap[employeeId] ?? <String, dynamic>{},
+                  const ['inc_details', 'incDetails'],
+                ),
+              ) ??
+              '',
+          _nextSalaryIncrementText(
+                _salaryIncrementText(
+                      employeeId,
+                      payroll['period'],
+                      defaultIncrementDetails: firstValue(
+                        salaryMap[employeeId] ?? <String, dynamic>{},
+                        const ['inc_details', 'incDetails'],
+                      ),
+                    ) ??
+                    '',
+                firstValue(employee, const [
+                  'joining_date',
+                  'joiningDate',
+                  'date_joined',
+                  'dateJoined',
+                  'tarikh_masuk_kerja',
+                  'tarikh_masuk',
+                ]),
+              ) ??
+              '',
+          textValue(firstValue(employee, const ['name'])),
+          textValue(
+            firstValue(
+                  employee,
+                  const ['new_ic_no', 'newIcNo'],
+                ) ??
+                payroll['new_ic_no'],
+          ),
+          totalSalary,
+          elaunKedatangan,
+          elaunPerkhidmatan,
+          elaunKerajinan,
+          overtime,
+          cutiUmum,
+          jumlah,
+          cutiTanpaGaji,
+          epf,
+          socso,
+          eis,
+          otherDeductions,
+          net,
+        ];
+
+        paymentSummary.add(
+          method: employee['salary_transfer_method'],
+          bankAccount: employee['bank_account'],
+          net: net,
+          row: rowNumber,
+          employeeId: employeeId,
+        );
+
+        for (var column = 0; column < values.length; column++) {
+          final cell = sheet.cell(
+            xls.CellIndex.indexByColumnRow(
+              columnIndex: column,
+              rowIndex: rowNumber - 1,
+            ),
+          );
+
+          final value = values[column];
+          if (value is num) {
+            columnTotals[column] += value.toDouble();
+            cell.value = xls.DoubleCellValue(value.toDouble());
+          } else {
+            cell.value = xls.TextCellValue(value?.toString() ?? '');
+          }
+
+          final style = cell.cellStyle ?? xls.CellStyle();
+          var updatedStyle = style.copyWith(
+            // Keep the serial-number column as 1, 2, 3... rather than 1.00.
+            numberFormat: column == 0
+                ? xls.NumFormat.standard_1
+                : value is num
+                    ? moneyNumberFormat
+                    : style.numberFormat,
+            // The supplied template is very small on screen; use a readable
+            // minimum while retaining its borders and colours.
+            fontSizeVal: (style.fontSize ?? 9) < exportBodyFontSize
+                ? exportBodyFontSize
+                : style.fontSize,
+            leftBorderVal: tableBorder,
+            rightBorderVal: tableBorder,
+            topBorderVal: tableBorder,
+            bottomBorderVal: tableBorder,
+          );
+          if (value is num) {
+            updatedStyle = updatedStyle.copyWith(
+              horizontalAlignVal: xls.HorizontalAlign.Center,
+            );
+          }
+          cell.cellStyle = updatedStyle;
+        }
+      }
+
+      // --------------------------------------------------------------------------
+      // 8. Rebuild TOTAL AMOUNT formulas at the new end of the employee table.
+      // --------------------------------------------------------------------------
+      final totalRow = lastDataRow + 1;
+
+      sheet.cell(xls.CellIndex.indexByString('A$totalRow')).value =
+          xls.TextCellValue('TOTAL AMOUNT');
+
+      // Write calculated values instead of formulas so totals are visible in
+      // Excel, LibreOffice and mobile spreadsheet viewers immediately.
+      for (var column = 7; column < columnTotals.length; column++) {
+        sheet
+            .cell(
+              xls.CellIndex.indexByColumnRow(
+                columnIndex: column,
+                rowIndex: totalRow - 1,
+              ),
+            )
+            .value = xls.DoubleCellValue(columnTotals[column]);
+      }
+
+      // Match the payroll statement layout: bold totals with a continuous
+      // horizontal rule above and below the complete A:T total row.
+      final totalBorder = xls.Border(borderStyle: xls.BorderStyle.Thin);
+      for (var column = 0; column < columnTotals.length; column++) {
+        final cell = sheet.cell(
+          xls.CellIndex.indexByColumnRow(
+            columnIndex: column,
+            rowIndex: totalRow - 1,
+          ),
+        );
+        cell.cellStyle = (cell.cellStyle ?? xls.CellStyle()).copyWith(
+          boldVal: true,
+          fontSizeVal: exportTotalFontSize,
+          horizontalAlignVal: xls.HorizontalAlign.Center,
+          topBorderVal: totalBorder,
+          bottomBorderVal: totalBorder,
+          leftBorderVal: totalBorder,
+          rightBorderVal: totalBorder,
+          numberFormat:
+              column >= 7 ? moneyNumberFormat : cell.cellStyle?.numberFormat,
+        );
+      }
+
+      // Payment totals use the same net-salary rows as the statement.
+      if (paymentSummary.hasUnassigned) {
+        final row = totalRow + 1;
+        sheet.cell(xls.CellIndex.indexByString('Q$row')).value =
+            xls.TextCellValue('Unassigned');
+        final amountCell = sheet.cell(xls.CellIndex.indexByString('R$row'));
+        amountCell.cellStyle = (amountCell.cellStyle ?? xls.CellStyle())
+            .copyWith(numberFormat: moneyNumberFormat);
+        amountCell.value = xls.FormulaCellValue(
+          paymentSummary.formula('unassigned', 'T')!,
+          cachedValue: paymentTotals['unassigned']!.toString(),
+        );
+      }
+      const paymentLabels = [
+        ('payroll', 'Payroll'),
+        ('instant', 'Instant'),
+        ('cash', 'Cash'),
+      ];
+      for (final entry in paymentLabels.indexed) {
+        final row = totalRow + 2 + entry.$1;
+        final key = entry.$2.$1;
+        sheet.cell(xls.CellIndex.indexByString('Q$row')).value =
+            xls.TextCellValue(entry.$2.$2);
+        final formula = paymentSummary.formula(key, 'T');
+        final amountCell = sheet.cell(xls.CellIndex.indexByString('R$row'));
+        amountCell.cellStyle = (amountCell.cellStyle ?? xls.CellStyle())
+            .copyWith(numberFormat: moneyNumberFormat);
+        amountCell.value = formula == null
+            ? xls.DoubleCellValue(0)
+            : xls.FormulaCellValue(formula,
+                cachedValue: paymentTotals[key]!.toString());
+      }
+      final footerTotalRow = totalRow + 5;
+      final firstPaymentRow = totalRow + (paymentSummary.hasUnassigned ? 1 : 2);
+      sheet.cell(xls.CellIndex.indexByString('Q$footerTotalRow')).value =
+          xls.TextCellValue('TOTAL');
+      sheet.cell(xls.CellIndex.indexByString('R$footerTotalRow')).value =
+          xls.FormulaCellValue(
+        'SUM(R$firstPaymentRow:R${totalRow + 4})',
+        cachedValue: columnTotals[19].toString(),
+      );
+
+      // --------------------------------------------------------------------------
+      // 9. Filename: branch + selected month.
+      // --------------------------------------------------------------------------
+      final safeBranch = branchName
+          .replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_')
+          .replaceAll(RegExp(r'_+'), '_')
+          .replaceAll(RegExp(r'^_|_$'), '');
+
+      final fileName =
+          'Penyata_Gaji_${safeBranch.isEmpty ? 'Branch' : safeBranch}_'
+          '${DateFormat('yyyy_MM').format(selectedPayrollMonth)}.xlsx';
+
+      final output = excel.encode();
+
+      if (output == null || output.isEmpty) {
+        throw Exception('Excel file could not be generated.');
+      }
+
+      await FileSaver.instance.saveFile(
+        name: fileName.replaceFirst(RegExp(r'\.xlsx$'), ''),
+        bytes: Uint8List.fromList(output),
+        ext: 'xlsx',
+        mimeType: MimeType.microsoftExcel,
+      );
+
+      _message('$fileName exported successfully.');
+    } catch (e) {
+      _message('Excel export failed: $e');
+    }
+  }
+
+  Future<void> _exportPayrollAllBranchesExcel(
+    List<Map<String, dynamic>> records,
+    Map<String, String> branchNames, {
+    void Function(String, Uint8List)? onFile,
+  }) async {
+    if (records.isEmpty) {
+      _message('No payroll records for the selected month.');
+      return;
+    }
+
+    try {
+      _message('Preparing the formatted payroll workbook...');
+
+      final employeeIds = records
+          .map((row) => _normalizeBranchValue(row['employee_id']))
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+      final employeeResponse = await SupabaseService.database
+          .from('employees')
+          .select()
+          .inFilter('employee_id', employeeIds);
+      final salaryResponse = await SupabaseService.database
+          .from('employee_salary_defaults')
+          .select()
+          .inFilter('employee_id', employeeIds);
+
+      final previousPayrollMonth =
+          DateTime(selectedPayrollMonth.year, selectedPayrollMonth.month - 1);
+      final previousPayrollResponse = await SupabaseService.database
+          .from('payroll')
+          .select()
+          .inFilter('employee_id', employeeIds)
+          .gte('period', DateFormat('yyyy-MM-dd').format(previousPayrollMonth))
+          .lt(
+            'period',
+            DateFormat('yyyy-MM-dd').format(
+              DateTime(
+                previousPayrollMonth.year,
+                previousPayrollMonth.month + 1,
+              ),
+            ),
+          );
+
+      final employeeMap = <String, Map<String, dynamic>>{};
+      for (final row in List<Map<String, dynamic>>.from(employeeResponse)) {
+        final id = _normalizeBranchValue(row['employee_id']);
+        if (id.isNotEmpty) employeeMap[id] = Map<String, dynamic>.from(row);
+      }
+      records = _visibleMonthPayroll(
+        records,
+        employeeMap.values,
+        selectedPayrollMonth,
+      );
+      if (records.isEmpty) {
+        _message('No eligible employee payroll for the selected month.');
+        return;
+      }
+
+      final salaryMap = <String, Map<String, dynamic>>{};
+      for (final row in List<Map<String, dynamic>>.from(salaryResponse)) {
+        final id = _normalizeBranchValue(row['employee_id']);
+        if (id.isNotEmpty) salaryMap[id] = Map<String, dynamic>.from(row);
+      }
+      final previousPayrollMap = <String, Map<String, dynamic>>{};
+      for (final row
+          in List<Map<String, dynamic>>.from(previousPayrollResponse)) {
+        final id = _normalizeBranchValue(row['employee_id']);
+        if (id.isNotEmpty) {
+          previousPayrollMap[id] = Map<String, dynamic>.from(row);
+        }
+      }
+
+      const sungaiPetaniForeignerGroup = '__SUNGAI_PETANI_FOREIGNER__';
+      const temporaryStaffGroup = '__TEMPORARY_STAFF__';
+
+      String canonicalBranchKey(String branchId) {
+        final raw = (branchNames[branchId] ?? branchId)
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z0-9]'), '');
+        const aliases = <String, String>{
+          'spedar': 'sungaipetani',
+          'hbsp': 'sungaipetani',
+          'hpspfrn': 'sungaipetani',
+          'hbspfrn': 'sungaipetani',
+          'hbperai': 'prai',
+          'hbperaifrn': 'prai',
+          'hbas': 'alorsetar',
+          'hbasfrn': 'alorsetar',
+          'hbjitra': 'jitra',
+          'hbjitrafrn': 'jitra',
+          'hbkulim': 'kulim',
+          'hbkulimfrn': 'kulim',
+          'hbastana': 'astana',
+          'hbastanafrn': 'astana',
+          'hbamj': 'amanjaya',
+          'hbamjfrn': 'amanjaya',
+          'hbgurun': 'gurun',
+          'hbgurunfrn': 'gurun',
+          'hblkw': 'langkawi',
+          'hblkwfrn': 'langkawi',
+        };
+        return aliases[raw] ?? raw;
+      }
+
+      bool isTrue(dynamic value) {
+        if (value is bool) return value;
+        final text = value?.toString().trim().toLowerCase() ?? '';
+        return text == 'true' || text == '1' || text == 'yes';
+      }
+
+      bool isForeignEmployee(
+        Map<String, dynamic> employee,
+        Map<String, dynamic> salary,
+      ) {
+        final marker = '${employee['address'] ?? ''} ${salary['address'] ?? ''}'
+            .toUpperCase();
+        return marker.contains('FRN');
+      }
+
+      final grouped = <String, List<Map<String, dynamic>>>{};
+      for (final payroll in records) {
+        final employeeId = _normalizeBranchValue(payroll['employee_id']);
+        final employee = employeeMap[employeeId] ?? <String, dynamic>{};
+        final salary = salaryMap[employeeId] ?? <String, dynamic>{};
+        final branchId = employee.isEmpty
+            ? _normalizeBranchValue(payroll['branch_id'])
+            : _payrollBranchIdFromEmployee(employee);
+        if (branchId.isEmpty) continue;
+
+        final isTemporary = isTrue(employee['is_temp_staff']) ||
+            employeeId.toUpperCase().contains('TEMP');
+        final canonicalBranch = canonicalBranchKey(branchId);
+        final groupKey = isTemporary
+            ? temporaryStaffGroup
+            : canonicalBranch == 'sungaipetani' &&
+                    isForeignEmployee(employee, salary)
+                ? sungaiPetaniForeignerGroup
+                : canonicalBranch;
+        grouped.putIfAbsent(groupKey, () => []).add(payroll);
+      }
+
+      final templateData = await rootBundle.load(
+        'assets/payroll_salary_template.xlsx',
+      );
+      final templateBytes = templateData.buffer.asUint8List(
+        templateData.offsetInBytes,
+        templateData.lengthInBytes,
+      );
+      final excel = xls.Excel.decodeBytes(templateBytes);
+
+      final sheetConfigs = <Map<String, dynamic>>[
+        {
+          'sheet': 'Edar (L)',
+          'branchHeaderRange': 'L2:Q2',
+          'group': 'sungaipetani',
+          'totalRow': 54,
+          'layout': 'local20',
+          'footerValueColumn': 17,
+          'paymentRows': <String, int>{
+            'payroll': 2,
+            'instant': 3,
+            'cash': 4,
+          },
+          'footerTotalOffset': 5,
+        },
+        {
+          'sheet': 'Edar (Temp)',
+          'branchHeaderRange': 'L2:P2',
+          'group': temporaryStaffGroup,
+          'totalRow': 22,
+          'layout': 'standard21',
+          // The template merges Q:R for labels and S:U for values.
+          'footerLabelColumn': 16,
+          'footerValueColumn': 18,
+          'footerEndColumn': 20,
+          'preparedByName': 'Prepared by',
+          'preparedByNameOffset': 2,
+          'preparedByOffset': 3,
+          'approvedByOffset': 3,
+          'paymentRows': <String, int>{
+            'payroll': 2,
+            'instant': 3,
+            'cash': 4,
+          },
+          'footerTotalOffset': 5,
+        },
+        {
+          'sheet': 'Edar (F)',
+          'branchHeaderRange': 'L2:Q2',
+          'group': sungaiPetaniForeignerGroup,
+          'totalRow': 21,
+          'layout': 'foreign21',
+          'footerValueColumn': 19,
+          'paymentRows': <String, int>{
+            'payroll': 2,
+            'instant': 3,
+            'cash': 4,
+            'paid': 5,
+          },
+          'footerTotalOffset': 6,
+        },
+        {
+          'sheet': 'AMJ',
+          'branchHeaderRange': 'L2:N2',
+          'group': 'amanjaya',
+          'totalRow': 17,
+          'layout': 'standard21',
+          'footerValueColumn': 18,
+          'paymentRows': <String, int>{
+            'payroll': 2,
+            'cash': 3,
+            'instant': 4,
+          },
+          'footerTotalOffset': 5,
+        },
+        {
+          'sheet': 'Gurun',
+          'branchHeaderRange': 'L2:N2',
+          'group': 'gurun',
+          'totalRow': 11,
+          'layout': 'standard21',
+          'footerValueColumn': 18,
+          'paymentRows': <String, int>{
+            'payroll': 2,
+            'instant': 3,
+            'cash': 4,
+          },
+          'footerTotalOffset': 5,
+        },
+        {
+          'sheet': 'Perai',
+          'branchHeaderRange': 'L2:N2',
+          'approvedByOffset': 5,
+          'group': 'prai',
+          'totalRow': 29,
+          'layout': 'standard21',
+          'footerValueColumn': 18,
+          'paymentRows': <String, int>{
+            'payroll': 2,
+            'instant': 3,
+            'cash': 4,
+          },
+          'footerTotalOffset': 5,
+        },
+        {
+          'sheet': 'Buku A.Setar',
+          'branchHeaderRange': 'L2:O2',
+          'approvedByOffset': 5,
+          'group': 'alorsetar',
+          'totalRow': 25,
+          'layout': 'standard21',
+          'footerValueColumn': 18,
+          'paymentRows': <String, int>{
+            'payroll': 2,
+            'cash': 3,
+            'instant': 4,
+          },
+          'footerTotalOffset': 5,
+        },
+        {
+          'sheet': 'Jitra',
+          'branchHeaderRange': 'L2:N2',
+          'group': 'jitra',
+          'totalRow': 24,
+          'layout': 'standard21',
+          'footerValueColumn': 18,
+          'paymentRows': <String, int>{
+            'payroll': 3,
+            'cash': 4,
+            'instant': 5,
+          },
+          'footerTotalOffset': 6,
+        },
+        {
+          'sheet': 'Kulim',
+          'branchHeaderRange': 'J2:N2',
+          'group': 'kulim',
+          'totalRow': 27,
+          'layout': 'standard21',
+          'footerValueColumn': 19,
+          'paymentRows': <String, int>{
+            'payroll': 2,
+            'cash': 3,
+            'instant': 4,
+          },
+          'footerTotalOffset': 5,
+        },
+        {
+          'sheet': 'Astana',
+          'branchHeaderRange': 'L2:N2',
+          'group': 'astana',
+          'totalRow': 18,
+          'layout': 'standard21',
+          'footerValueColumn': 18,
+          'paymentRows': <String, int>{
+            'payroll': 2,
+            'cash': 3,
+            'instant': 4,
+          },
+          'footerTotalOffset': 5,
+        },
+        {
+          'sheet': 'Langkawi',
+          'branchHeaderRange': 'L2:O2',
+          'group': 'langkawi',
+          'totalRow': 17,
+          'layout': 'standard21',
+          'footerValueColumn': 18,
+          'paymentRows': <String, int>{
+            'payroll': 2,
+            'cash': 3,
+            'instant': 4,
+          },
+          'footerTotalOffset': 5,
+        },
+      ];
+
+      dynamic firstValue(Map<String, dynamic> row, List<String> keys) {
+        for (final key in keys) {
+          final value = row[key];
+          if (value != null && value.toString().trim().isNotEmpty) return value;
+        }
+        return null;
+      }
+
+      String textValue(dynamic value) => value?.toString().trim() ?? '';
+
+      String dateText(dynamic value) {
+        if (value == null) return '';
+        if (value is DateTime) return DateFormat('dd/MM/yyyy').format(value);
+        final text = value.toString().trim();
+        final parsed = DateTime.tryParse(text);
+        return parsed == null ? text : DateFormat('dd/MM/yyyy').format(parsed);
+      }
+
+      double money(dynamic value) => _payrollNumber(value);
+
+      void writeCell(
+        xls.Sheet sheet,
+        int rowNumber,
+        int columnIndex,
+        dynamic value,
+      ) {
+        final cell = sheet.cell(
+          xls.CellIndex.indexByColumnRow(
+            columnIndex: columnIndex,
+            rowIndex: rowNumber - 1,
+          ),
+        );
+        if (value == null || value.toString().isEmpty) {
+          cell.value = null;
+        } else if (value is num) {
+          // Payroll statement display rule: show zero amounts as "-" while
+          // keeping non-zero amounts numeric for Excel totals/calculations.
+          final number = value.toDouble();
+          cell.value = number.abs() < 0.005
+              ? xls.TextCellValue('-')
+              : xls.DoubleCellValue(number);
+        } else {
+          cell.value = xls.TextCellValue(value.toString());
+        }
+      }
+
+      void writeFormula(
+        xls.Sheet sheet,
+        int rowNumber,
+        int columnIndex,
+        String formula,
+        double cachedValue,
+      ) {
+        final cell = sheet.cell(
+          xls.CellIndex.indexByColumnRow(
+            columnIndex: columnIndex,
+            rowIndex: rowNumber - 1,
+          ),
+        );
+        // Keep the formula even when its current result is zero so that
+        // manual edits in Excel always recalculate. The money number format
+        // displays a zero result as "-" without replacing it with text.
+        cell.value = xls.FormulaCellValue(
+          formula,
+          cachedValue: cachedValue.toString(),
+        );
+      }
+
+      void writeMonthHeader(xls.Sheet sheet, int lastColumnIndex) {
+        final monthText =
+            DateFormat('MMMM yyyy').format(selectedPayrollMonth).toUpperCase();
+        final cell = sheet.cell(
+          xls.CellIndex.indexByString('A3'),
+        );
+        sheet.merge(
+          xls.CellIndex.indexByString('A3'),
+          xls.CellIndex.indexByColumnRow(
+            columnIndex: lastColumnIndex,
+            rowIndex: 2,
+          ),
+          customValue: xls.TextCellValue(monthText),
+        );
+        // The supplied sheets already contain this merged range. In that case
+        // merge() may preserve the existing blank value, so always write the
+        // selected payroll month explicitly to the merge's top-left cell.
+        cell.value = xls.TextCellValue(monthText);
+        cell.cellStyle = (cell.cellStyle ?? xls.CellStyle()).copyWith(
+          boldVal: true,
+          fontSizeVal: 16,
+          horizontalAlignVal: xls.HorizontalAlign.Center,
+        );
+      }
+
+      List<String> cleanPayrollHeaders(String layout) {
+        if (layout == 'foreign21') {
+          return const [
+            'NO',
+            'ID STAF',
+            'TARIKH MASUK KERJA',
+            'KENAIKAN TERAKHIR',
+            'KENAIKAN SETERUSNYA',
+            'PERMIT',
+            'NAMA',
+            'NO IC / PASSPORT',
+            'GAJI',
+            'ELAUN KEDATANGAN',
+            'ELAUN PERKHIDMATAN',
+            'ELAUN KERAJINAN',
+            'ELAUN MAKAN',
+            'OT',
+            'CUTI UMUM',
+            'JUMLAH',
+            'CUTI TANPA GAJI',
+            'KWSP',
+            'PERKESO',
+            'POTONGAN',
+            'JUMLAH BERSIH',
+          ];
+        }
+        final common = <String>[
+          'NO',
+          'ID STAF',
+          'TARIKH MASUK KERJA',
+          'KENAIKAN TERAKHIR',
+          'KENAIKAN SETERUSNYA',
+          'NAMA',
+          'NO IC / PASSPORT',
+          'GAJI',
+          'ELAUN KEDATANGAN',
+          'ELAUN PERKHIDMATAN',
+          'ELAUN KERAJINAN',
+        ];
+        if (layout != 'local20') common.add('ELAUN MAKAN');
+        common.addAll(const [
+          'OT',
+          'CUTI UMUM',
+          'JUMLAH',
+          'CUTI TANPA GAJI',
+          'KWSP',
+          'PERKESO',
+          'SIP',
+          'POTONGAN',
+          'JUMLAH BERSIH',
+        ]);
+        return common;
+      }
+
+      for (final config in sheetConfigs) {
+        final sheetName = config['sheet'] as String;
+        if (!excel.tables.containsKey(sheetName)) {
+          throw Exception('Payroll template sheet "$sheetName" is missing.');
+        }
+        final sheet = excel[sheetName];
+        final layout = config['layout'] as String;
+        final templateTotalRow = config['totalRow'] as int;
+        final templatePrintArea = sheet.printArea;
+        final templatePrintEndRow = int.tryParse(
+          RegExp(r'(\d+)$').firstMatch(templatePrintArea ?? '')?.group(1) ?? '',
+        );
+        final branchRecords = List<Map<String, dynamic>>.from(
+          grouped[config['group']] ?? const <Map<String, dynamic>>[],
+        )..sort((a, b) => _comparePayrollExportRecords(a, b, employeeMap));
+
+        const firstDataRow = 5;
+        final originalDataCapacity = templateTotalRow - firstDataRow;
+        final extraRows = branchRecords.length > originalDataCapacity
+            ? branchRecords.length - originalDataCapacity
+            : 0;
+        if (extraRows > 0) {
+          // Insert immediately before the total row.  The template's total,
+          // payment summary, signatures, and print layout move down together.
+          // Copying the final data-row style keeps the added rows identical to
+          // the manually prepared layout.
+          for (var index = 0; index < extraRows; index++) {
+            excel.insertRow(sheetName, templateTotalRow - 1 + index);
+          }
+          for (var rowOffset = 0; rowOffset < extraRows; rowOffset++) {
+            final sourceRow = templateTotalRow - 2;
+            final targetRow = templateTotalRow - 1 + rowOffset;
+            for (var column = 0; column < 21; column++) {
+              final source = sheet.cell(
+                xls.CellIndex.indexByColumnRow(
+                  columnIndex: column,
+                  rowIndex: sourceRow,
+                ),
+              );
+              final target = sheet.cell(
+                xls.CellIndex.indexByColumnRow(
+                  columnIndex: column,
+                  rowIndex: targetRow,
+                ),
+              );
+              target.cellStyle = source.cellStyle;
+            }
+          }
+        }
+
+        // Keep the template footer rows intact. Physically deleting employee
+        // rows can damage its merged signature/payment layout, so unused rows
+        // are collapsed during the data pass instead.
+        final dataCapacity = originalDataCapacity + extraRows;
+        final totalRow = templateTotalRow + extraRows;
+        final columnCount = layout == 'local20' ? 20 : 21;
+        final columnTotals = List<double>.filled(columnCount, 0);
+        final tableBorder = xls.Border(borderStyle: xls.BorderStyle.Thin);
+        const exportBodyFontSize = 11;
+        const exportTotalFontSize = 13;
+        final moneyNumberFormat = xls.NumFormat.custom(
+          formatCode: '#,##0.00;-#,##0.00;-',
+        );
+        final paymentSummary = SalaryTransferSummary();
+        final paymentTotals = paymentSummary.totals;
+        final paymentEmployeeRows = paymentSummary.rows;
+
+        writeMonthHeader(sheet, layout == 'local20' ? 19 : 20);
+        final branchHeaderRange = config['branchHeaderRange'] as String;
+        final branchHeaderStart = branchHeaderRange.split(':').first;
+        final branchHeaderValue =
+            sheet.cell(xls.CellIndex.indexByString(branchHeaderStart)).value;
+        excel.unMerge(sheetName, branchHeaderRange);
+        sheet.cell(xls.CellIndex.indexByString(branchHeaderStart)).value = null;
+        const movedBranchHeaderEnd = 'U2';
+        sheet.merge(
+          xls.CellIndex.indexByString('M2'),
+          xls.CellIndex.indexByString(movedBranchHeaderEnd),
+        );
+        final movedBranchHeader = sheet.cell(xls.CellIndex.indexByString('M2'));
+        movedBranchHeader.value = branchHeaderValue;
+        movedBranchHeader.cellStyle =
+            (movedBranchHeader.cellStyle ?? xls.CellStyle()).copyWith(
+          boldVal: true,
+          fontSizeVal: 20,
+          fontColorHexVal: xls.ExcelColor.fromHexString('FF1F4E78'),
+          horizontalAlignVal: xls.HorizontalAlign.Center,
+          verticalAlignVal: xls.VerticalAlign.Center,
+        );
+        sheet.setRowHeight(1, 32);
+
+        final cleanHeaders = cleanPayrollHeaders(layout);
+        for (var column = 0; column < columnCount; column++) {
+          final headerCell = sheet.cell(
+            xls.CellIndex.indexByColumnRow(
+              columnIndex: column,
+              rowIndex: firstDataRow - 2,
+            ),
+          );
+          headerCell.value = xls.TextCellValue(cleanHeaders[column]);
+          var headerStyle = _excelHeaderStyle(headerCell.cellStyle);
+          if (sheetName == 'Edar (L)') {
+            headerStyle = headerStyle.copyWith(fontSizeVal: 11);
+          }
+          headerCell.cellStyle = headerStyle;
+        }
+
+        void applyTableBorderAndAlignment(
+          int rowNumber,
+          int columnIndex, {
+          bool bold = false,
+          double? fontSize,
+          bool center = false,
+          bool left = false,
+          bool middle = false,
+          xls.NumFormat? numberFormat,
+        }) {
+          final cell = sheet.cell(
+            xls.CellIndex.indexByColumnRow(
+              columnIndex: columnIndex,
+              rowIndex: rowNumber - 1,
+            ),
+          );
+          final style = cell.cellStyle ?? xls.CellStyle();
+          cell.cellStyle = style.copyWith(
+            boldVal: bold ? true : null,
+            fontSizeVal: fontSize?.toInt(),
+            numberFormat: numberFormat ?? style.numberFormat,
+            horizontalAlignVal: left
+                ? xls.HorizontalAlign.Left
+                : center
+                    ? xls.HorizontalAlign.Center
+                    : null,
+            verticalAlignVal: middle ? xls.VerticalAlign.Center : null,
+            leftBorderVal: tableBorder,
+            rightBorderVal: tableBorder,
+            topBorderVal: tableBorder,
+            bottomBorderVal: tableBorder,
+          );
+        }
+
+        for (var rowOffset = 0; rowOffset < dataCapacity; rowOffset++) {
+          final rowNumber = firstDataRow + rowOffset;
+          for (var column = 0; column < 21; column++) {
+            writeCell(sheet, rowNumber, column, null);
+          }
+          if (rowOffset >= branchRecords.length) {
+            sheet.setRowHeight(rowNumber - 1, 0.1);
+            continue;
+          }
+
+          // Keep the original compact EDAR (L) employee rows. All other
+          // branch sheets need extra height so employee data is easier to read.
+          sheet.setRowHeight(
+            rowNumber - 1,
+            sheetName == 'Edar (L)' ? 18 : 41.25,
+          );
+
+          final payroll = branchRecords[rowOffset];
+          final employeeId = _normalizeBranchValue(payroll['employee_id']);
+          final employee = employeeMap[employeeId] ?? <String, dynamic>{};
+          final basic = money(payroll['basic_salary']);
+          final foreignSalary = money(payroll['fw_salary']);
+          final salaryBase = foreignSalary != 0 ? foreignSalary : basic;
+          final attendanceAllowance = money(payroll['elaun_kedatangan']);
+          final serviceAllowance = money(payroll['elaun_perkhidmatan']);
+          final diligenceAllowance = money(payroll['elaun_kerajinan']);
+          final foodAllowance = money(payroll['elaun_makanan']);
+          final overtime = money(payroll['overtime']);
+          final publicHoliday = money(payroll['cuti_umum']);
+          final gross = SavedPayrollAmounts.fromRow(payroll).gross;
+          final unpaid = money(firstValue(payroll, const [
+                'unpaid_deduction',
+                'unpaid_leave',
+                'cuti_tanpa_gaji',
+              ])) +
+              money(payroll['late_deduction']);
+          final epf = money(payroll['epf_employee']);
+          final socso = money(payroll['socso_employee']);
+          final eis = money(payroll['eis_employee']);
+          final otherDeductions = money(payroll['pcb']) +
+              money(payroll['zakat']) +
+              money(firstValue(payroll, const [
+                'advance',
+                'advance_deduction',
+                'advanceDeduction',
+              ])) +
+              money(firstValue(payroll, const [
+                'loan',
+                'loan_deduction',
+                'loanDeduction',
+              ])) +
+              money(firstValue(payroll, const [
+                'other_deduction_amount',
+                'otherDeductionAmount',
+              ]));
+          final net = SavedPayrollAmounts.finalNetPay(payroll);
+
+          String lastIncrementText() {
+            final previous = previousPayrollMap[employeeId];
+            if (previous != null) {
+              final currentIncrementBase = salaryBase +
+                  attendanceAllowance +
+                  serviceAllowance +
+                  diligenceAllowance;
+              final previousBasic = money(previous['basic_salary']);
+              final previousForeign = money(previous['fw_salary']);
+              final previousSalaryBase =
+                  previousForeign != 0 ? previousForeign : previousBasic;
+              final previousIncrementBase = previousSalaryBase +
+                  money(previous['elaun_kedatangan']) +
+                  money(previous['elaun_perkhidmatan']) +
+                  money(previous['elaun_kerajinan']);
+              final difference =
+                  ((currentIncrementBase - previousIncrementBase) * 100)
+                          .round() /
+                      100;
+
+              if (difference > 0) {
+                const monthNames = [
+                  'JAN',
+                  'FEB',
+                  'MAR',
+                  'APR',
+                  'MAY',
+                  'JUN',
+                  'JUL',
+                  'AUG',
+                  'SEPT',
+                  'OCT',
+                  'NOV',
+                  'DEC',
+                ];
+                final year = (selectedPayrollMonth.year % 100)
+                    .toString()
+                    .padLeft(2, '0');
+                final amount = difference.roundToDouble() == difference
+                    ? difference.toStringAsFixed(0)
+                    : difference.toStringAsFixed(2);
+                return '${monthNames[selectedPayrollMonth.month - 1]}-$year/$amount';
+              }
+            }
+
+            final maintained =
+                salaryMap[employeeId]?['inc_details']?.toString().trim() ?? '';
+            return maintained;
+          }
+
+          final employeeName = textValue(
+            firstValue(employee, const ['name']) ?? payroll['name'],
+          );
+          final identityNumber = textValue(
+            firstValue(employee, const ['new_ic_no', 'newIcNo']) ??
+                payroll['new_ic_no'],
+          );
+
+          late final List<dynamic> values;
+          if (layout == 'foreign21') {
+            values = <dynamic>[
+              rowOffset + 1,
+              employeeId,
+              dateText(firstValue(employee, const ['joining_date'])),
+              lastIncrementText(),
+              _nextSalaryIncrementText(
+                    lastIncrementText(),
+                    firstValue(employee, const ['joining_date']),
+                  ) ??
+                  '',
+              textValue(firstValue(employee, const [
+                'permit',
+                'permit_type',
+                'work_permit',
+              ])),
+              employeeName,
+              identityNumber,
+              salaryBase,
+              attendanceAllowance,
+              serviceAllowance,
+              diligenceAllowance,
+              foodAllowance,
+              overtime,
+              publicHoliday,
+              gross,
+              unpaid,
+              epf,
+              socso,
+              otherDeductions + eis,
+              net,
+            ];
+          } else if (layout == 'local20') {
+            values = <dynamic>[
+              rowOffset + 1,
+              employeeId,
+              dateText(firstValue(employee, const ['joining_date'])),
+              lastIncrementText(),
+              _nextSalaryIncrementText(
+                    lastIncrementText(),
+                    firstValue(employee, const ['joining_date']),
+                  ) ??
+                  '',
+              employeeName,
+              identityNumber,
+              salaryBase,
+              attendanceAllowance,
+              serviceAllowance,
+              diligenceAllowance,
+              overtime,
+              publicHoliday,
+              gross,
+              unpaid,
+              epf,
+              socso,
+              eis,
+              otherDeductions,
+              net,
+            ];
+          } else {
+            values = <dynamic>[
+              rowOffset + 1,
+              employeeId,
+              dateText(firstValue(employee, const ['joining_date'])),
+              lastIncrementText(),
+              _nextSalaryIncrementText(
+                    lastIncrementText(),
+                    firstValue(employee, const ['joining_date']),
+                  ) ??
+                  '',
+              employeeName,
+              identityNumber,
+              salaryBase,
+              attendanceAllowance,
+              serviceAllowance,
+              diligenceAllowance,
+              foodAllowance,
+              overtime,
+              publicHoliday,
+              gross,
+              unpaid,
+              epf,
+              socso,
+              eis,
+              otherDeductions,
+              net,
+            ];
+          }
+
+          final isEdarLocal = sheetName == 'Edar (L)';
+          final nameColumn = layout == 'foreign21' ? 6 : 5;
+          final grossColumn = layout == 'local20'
+              ? 13
+              : layout == 'foreign21'
+                  ? 15
+                  : 14;
+          final netColumn = layout == 'local20' ? 19 : 20;
+
+          for (var column = 0; column < values.length; column++) {
+            final value = values[column];
+            writeCell(sheet, rowNumber, column, value);
+            final cell = sheet.cell(
+              xls.CellIndex.indexByColumnRow(
+                columnIndex: column,
+                rowIndex: rowNumber - 1,
+              ),
+            );
+            final style = cell.cellStyle ?? xls.CellStyle();
+            final emphasizeEmployeeColumn = !isEdarLocal &&
+                (column == nameColumn ||
+                    column == grossColumn ||
+                    column == netColumn);
+            var updatedStyle = style.copyWith(
+              // The first column is a serial number, never currency/decimal.
+              numberFormat: column == 0
+                  ? xls.NumFormat.standard_1
+                  : value is num
+                      ? moneyNumberFormat
+                      : style.numberFormat,
+              // EDAR (L) keeps its proven template typography. Every other
+              // employee row uses one consistent 14-point size, including
+              // JUMLAH and JUMLAH BERSIH.
+              fontSizeVal: isEdarLocal
+                  ? ((style.fontSize ?? 9) < exportBodyFontSize
+                      ? exportBodyFontSize
+                      : style.fontSize)
+                  : 14,
+              boldVal: emphasizeEmployeeColumn ? true : null,
+              // Keep only the employee name left-aligned. Columns A-E and
+              // the IC/passport column (G on the standard layouts) are
+              // centered, as are all monetary columns.
+              horizontalAlignVal: column == nameColumn
+                  ? xls.HorizontalAlign.Left
+                  : xls.HorizontalAlign.Center,
+              verticalAlignVal: xls.VerticalAlign.Center,
+              leftBorderVal: tableBorder,
+              rightBorderVal: tableBorder,
+              topBorderVal: tableBorder,
+              bottomBorderVal: tableBorder,
+            );
+            if (value is num && isEdarLocal) {
+              updatedStyle = updatedStyle.copyWith(
+                horizontalAlignVal: xls.HorizontalAlign.Center,
+              );
+            }
+            cell.cellStyle = updatedStyle;
+            if (value is num) columnTotals[column] += value.toDouble();
+          }
+
+          // Employee gross/net cells are the saved payroll snapshot. Only
+          // footer totals recalculate in Excel; opening the workbook must not
+          // change a payment or discard final five-sen rounding.
+
+          // Re-assert the complete table border so JUMLAH
+          // always remains visibly inside the employee table.
+          for (var column = 0; column < columnCount; column++) {
+            applyTableBorderAndAlignment(rowNumber, column);
+          }
+          if (!isEdarLocal) {
+            applyTableBorderAndAlignment(
+              rowNumber,
+              nameColumn,
+              bold: true,
+              fontSize: 14,
+            );
+            for (final column in [grossColumn, netColumn]) {
+              applyTableBorderAndAlignment(
+                rowNumber,
+                column,
+                bold: true,
+                fontSize: 14,
+                center: true,
+                middle: true,
+                numberFormat: moneyNumberFormat,
+              );
+            }
+          } else {
+            // EDAR (L): JUMLAH and JUMLAH BERSIH must remain visually
+            // consistent after their live formulas replace the cell values.
+            for (final column in [grossColumn, netColumn]) {
+              applyTableBorderAndAlignment(
+                rowNumber,
+                column,
+                bold: true,
+                fontSize: 11,
+                center: true,
+                middle: true,
+                numberFormat: moneyNumberFormat,
+              );
+            }
+          }
+
+          paymentSummary.add(
+            method: employee['salary_transfer_method'],
+            bankAccount: employee['bank_account'],
+            net: net,
+            row: rowNumber,
+            employeeId: payroll['employee_id'].toString(),
+          );
+        }
+
+        // Remove the template's old label and formulas before rebuilding the
+        // total row. This prevents "TOTAL AMOUNT" appearing twice.
+        for (var column = 0; column < columnCount; column++) {
+          writeCell(sheet, totalRow, column, null);
+        }
+        if (sheetName != 'Edar (L)') {
+          final totalStart = xls.CellIndex.indexByColumnRow(
+            columnIndex: 0,
+            rowIndex: totalRow - 1,
+          );
+          final totalEnd = xls.CellIndex.indexByColumnRow(
+            columnIndex: 6,
+            rowIndex: totalRow - 1,
+          );
+          sheet.merge(
+            totalStart,
+            totalEnd,
+            customValue: xls.TextCellValue('TOTAL AMOUNT'),
+          );
+          // Existing template merges keep their original value, so explicitly
+          // set the top-left cell after merging as well.
+          sheet.cell(totalStart).value = xls.TextCellValue('TOTAL AMOUNT');
+        }
+
+        final firstMoneyColumn = layout == 'foreign21' ? 8 : 7;
+        for (var column = firstMoneyColumn;
+            column < columnTotals.length;
+            column++) {
+          final columnName = xls.CellIndex.indexByColumnRow(
+            columnIndex: column,
+            rowIndex: 0,
+          ).cellId.replaceAll(RegExp(r'\d'), '');
+          writeFormula(
+            sheet,
+            totalRow,
+            column,
+            'SUM($columnName$firstDataRow:$columnName${totalRow - 1})',
+            columnTotals[column],
+          );
+        }
+
+        if (sheetName == 'Edar (L)') {
+          writeCell(sheet, totalRow, 0, 'TOTAL AMOUNT');
+        }
+        for (var column = 0; column < columnCount; column++) {
+          final cell = sheet.cell(
+            xls.CellIndex.indexByColumnRow(
+              columnIndex: column,
+              rowIndex: totalRow - 1,
+            ),
+          );
+          cell.cellStyle = (cell.cellStyle ?? xls.CellStyle()).copyWith(
+            boldVal: true,
+            fontSizeVal: exportTotalFontSize,
+            horizontalAlignVal: xls.HorizontalAlign.Center,
+            verticalAlignVal: xls.VerticalAlign.Center,
+            backgroundColorHexVal: xls.ExcelColor.fromHexString('FFD9EAF7'),
+            leftBorderVal: tableBorder,
+            rightBorderVal: tableBorder,
+            topBorderVal: tableBorder,
+            bottomBorderVal: tableBorder,
+            numberFormat: column >= firstMoneyColumn
+                ? moneyNumberFormat
+                : cell.cellStyle?.numberFormat,
+          );
+        }
+
+        // Draw a double-line outer perimeter around the complete payroll
+        // table, from the header row through TOTAL AMOUNT. Interior gridlines
+        // remain thin so individual employee values stay easy to follow.
+        final payrollOuterBorder = xls.Border(
+          borderStyle: xls.BorderStyle.Double,
+        );
+        final headerRow = firstDataRow - 1;
+        for (var row = headerRow; row <= totalRow; row++) {
+          for (var column = 0; column < columnCount; column++) {
+            final cell = sheet.cell(
+              xls.CellIndex.indexByColumnRow(
+                columnIndex: column,
+                rowIndex: row - 1,
+              ),
+            );
+            final style = cell.cellStyle ?? xls.CellStyle();
+            cell.cellStyle = style.copyWith(
+              leftBorderVal:
+                  column == 0 ? payrollOuterBorder : style.leftBorder,
+              rightBorderVal: column == columnCount - 1
+                  ? payrollOuterBorder
+                  : style.rightBorder,
+              topBorderVal:
+                  row == headerRow ? payrollOuterBorder : style.topBorder,
+              bottomBorderVal:
+                  row == totalRow ? payrollOuterBorder : style.bottomBorder,
+            );
+          }
+        }
+
+        final preparedByOffset = config['preparedByOffset'] as int?;
+        if (preparedByOffset != null) {
+          final preparedByRow = totalRow + preparedByOffset;
+          final preparedByNameRow =
+              totalRow + (config['preparedByNameOffset'] as int? ?? 2);
+          final preparedByName =
+              config['preparedByName']?.toString() ?? 'Prepared by';
+          final signatureLine = xls.Border(
+            borderStyle: xls.BorderStyle.Thin,
+          );
+          final nameCell = sheet.cell(
+            xls.CellIndex.indexByString('F$preparedByNameRow'),
+          );
+          nameCell.value = xls.TextCellValue(preparedByName);
+          nameCell.cellStyle = (nameCell.cellStyle ?? xls.CellStyle()).copyWith(
+            horizontalAlignVal: xls.HorizontalAlign.Center,
+            verticalAlignVal: xls.VerticalAlign.Center,
+            bottomBorderVal: signatureLine,
+          );
+          final labelCell = sheet.cell(
+            xls.CellIndex.indexByString('F$preparedByRow'),
+          );
+          labelCell.value = xls.TextCellValue('PREPARED BY');
+          labelCell.cellStyle =
+              (labelCell.cellStyle ?? xls.CellStyle()).copyWith(
+            boldVal: true,
+            horizontalAlignVal: xls.HorizontalAlign.Center,
+            verticalAlignVal: xls.VerticalAlign.Center,
+            topBorderVal: signatureLine,
+          );
+        }
+
+        final approvedByOffset = config['approvedByOffset'] as int?;
+        if (approvedByOffset != null) {
+          final approvedByRow = totalRow + approvedByOffset;
+          if (sheetName == 'Edar (Temp)') {
+            excel.unMerge(sheetName, 'L$approvedByRow:O$approvedByRow');
+          }
+          excel.unMerge(sheetName, 'M$approvedByRow:N$approvedByRow');
+          sheet.merge(
+            xls.CellIndex.indexByString('M$approvedByRow'),
+            xls.CellIndex.indexByString('O$approvedByRow'),
+            customValue: xls.TextCellValue('APPROVED BY'),
+          );
+          final signatureLine = xls.Border(
+            borderStyle: xls.BorderStyle.Thin,
+          );
+          for (var column = 12; column <= 14; column++) {
+            final cell = sheet.cell(
+              xls.CellIndex.indexByColumnRow(
+                columnIndex: column,
+                rowIndex: approvedByRow - 1,
+              ),
+            );
+            cell.cellStyle = (cell.cellStyle ?? xls.CellStyle()).copyWith(
+              boldVal: true,
+              horizontalAlignVal: xls.HorizontalAlign.Left,
+              topBorderVal: signatureLine,
+            );
+          }
+        }
+
+        final paymentRows = <String, int>{
+          if (paymentSummary.hasUnassigned) 'unassigned': 1,
+          ...config['paymentRows'] as Map<String, int>,
+        };
+        final footerValueColumn = config['footerValueColumn'] as int;
+        final netColumn = layout == 'local20' ? 19 : 20;
+        final netTotal = columnTotals[netColumn];
+        final netColumnName = xls.CellIndex.indexByColumnRow(
+          columnIndex: netColumn,
+          rowIndex: 0,
+        ).cellId.replaceAll(RegExp(r'\d'), '');
+        List<int> paymentContributorRows(String paymentKey) =>
+            List<int>.from(paymentEmployeeRows[paymentKey] ?? const <int>[]);
+
+        String? formulaForNetRows(List<int> rows) {
+          if (rows.isEmpty) return null;
+          return 'SUM(${rows.map((row) => '$netColumnName$row').join(',')})';
+        }
+
+        double cachedPaymentTotal(String paymentKey) =>
+            paymentTotals[paymentKey] ?? 0;
+
+        final paymentLabelColumn = (config['footerLabelColumn'] as int?) ??
+            (layout == 'local20'
+                ? footerValueColumn - 1
+                : layout == 'foreign21'
+                    ? 15
+                    : footerValueColumn - 2);
+        final footerEndColumn = (config['footerEndColumn'] as int?) ??
+            (layout == 'local20' ? footerValueColumn : 20);
+        void writePaymentSummaryRow(
+          int rowNumber,
+          String label,
+          double amount, {
+          bool isTotal = false,
+          String? formula,
+        }) {
+          writeCell(sheet, rowNumber, paymentLabelColumn, label);
+          if (formula == null) {
+            writeCell(sheet, rowNumber, footerValueColumn, amount);
+          } else {
+            writeFormula(
+              sheet,
+              rowNumber,
+              footerValueColumn,
+              formula,
+              amount,
+            );
+          }
+          for (var column = paymentLabelColumn;
+              column <= footerEndColumn;
+              column++) {
+            final cell = sheet.cell(
+              xls.CellIndex.indexByColumnRow(
+                columnIndex: column,
+                rowIndex: rowNumber - 1,
+              ),
+            );
+            cell.cellStyle = (cell.cellStyle ?? xls.CellStyle()).copyWith(
+              boldVal: isTotal || column < footerValueColumn,
+              fontSizeVal: exportTotalFontSize,
+              horizontalAlignVal: xls.HorizontalAlign.Center,
+              leftBorderVal: tableBorder,
+              rightBorderVal: tableBorder,
+              topBorderVal: tableBorder,
+              bottomBorderVal: tableBorder,
+              numberFormat: column == footerValueColumn
+                  ? moneyNumberFormat
+                  : cell.cellStyle?.numberFormat,
+            );
+          }
+        }
+
+        for (final paymentRow in paymentRows.entries) {
+          final contributorRows = paymentContributorRows(paymentRow.key);
+          writePaymentSummaryRow(
+            totalRow + paymentRow.value,
+            paymentRow.key.toUpperCase(),
+            cachedPaymentTotal(paymentRow.key),
+            formula: formulaForNetRows(contributorRows),
+          );
+        }
+        writePaymentSummaryRow(
+          totalRow + (config['footerTotalOffset'] as int),
+          'TOTAL',
+          netTotal,
+          isTotal: true,
+          formula:
+              'SUM($netColumnName$firstDataRow:$netColumnName${totalRow - 1})',
+        );
+
+        // Enclose every sheet's payment summary in the same double-line
+        // outer box. EDAR (L) retains its explicitly requested O:T range;
+        // other sheets follow their own label/value footer ranges.
+        final boxStartColumn =
+            sheetName == 'Edar (L)' ? 14 : paymentLabelColumn;
+        final boxEndColumn = sheetName == 'Edar (L)' ? 19 : footerEndColumn;
+        final boxTopRow = totalRow +
+            paymentRows.values.reduce(
+              (first, next) => first < next ? first : next,
+            );
+        final boxBottomRow = totalRow + (config['footerTotalOffset'] as int);
+        final doubleBorder = xls.Border(
+          borderStyle: xls.BorderStyle.Double,
+        );
+
+        for (var row = boxTopRow; row <= boxBottomRow; row++) {
+          for (var column = boxStartColumn; column <= boxEndColumn; column++) {
+            final cell = sheet.cell(
+              xls.CellIndex.indexByColumnRow(
+                columnIndex: column,
+                rowIndex: row - 1,
+              ),
+            );
+            final style = cell.cellStyle ?? xls.CellStyle();
+            cell.cellStyle = style.copyWith(
+              leftBorderVal:
+                  column == boxStartColumn ? doubleBorder : style.leftBorder,
+              rightBorderVal:
+                  column == boxEndColumn ? doubleBorder : style.rightBorder,
+              topBorderVal: row == boxTopRow ? doubleBorder : style.topBorder,
+              bottomBorderVal:
+                  row == boxBottomRow ? doubleBorder : style.bottomBorder,
+            );
+          }
+        }
+
+        // Row insertion does not automatically extend an XLSX defined print
+        // area. Keep the complete shifted footer and signatures printable.
+        if (templatePrintEndRow != null) {
+          sheet.setPrintArea(
+            xls.CellIndex.indexByString('A1'),
+            xls.CellIndex.indexByString(
+              '${layout == 'local20' ? 'T' : 'U'}${templatePrintEndRow + extraRows}',
+            ),
+          );
+        }
+      }
+
+      final monthFile = DateFormat('yyyy_MM').format(selectedPayrollMonth);
+      final fileName = 'Penyata_Gaji_All_Branches_$monthFile.xlsx';
+      final output = excel.encode();
+      if (output == null || output.isEmpty) {
+        throw Exception('Excel file could not be generated.');
+      }
+      if (onFile != null) {
+        onFile(fileName, Uint8List.fromList(output));
+      } else
+        await FileSaver.instance.saveFile(
+          name: fileName.replaceFirst(RegExp(r'\.xlsx$'), ''),
+          bytes: Uint8List.fromList(output),
+          ext: 'xlsx',
+          mimeType: MimeType.microsoftExcel,
+        );
+      _message('$fileName exported successfully with 11 formatted sheets.');
+    } catch (e) {
+      _message('Formatted all-branches workbook could not be exported: $e');
+    }
+  }
+
+  Future<void> _exportPayrollAllBranchesExcelLegacy(
+    List<Map<String, dynamic>> records,
+    Map<String, String> branchNames,
+  ) async {
+    if (records.isEmpty) {
+      _message('No payroll records for the selected month.');
+      return;
+    }
+
+    try {
+      _message('Preparing one Excel file for all branches...');
+
+      final employeeIds = records
+          .map((r) => _normalizeBranchValue(r['employee_id']))
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+
+      final employeeResponse = await SupabaseService.database
+          .from('employees')
+          .select()
+          .inFilter('employee_id', employeeIds);
+
+      final employeeMap = <String, Map<String, dynamic>>{};
+      for (final row in List<Map<String, dynamic>>.from(employeeResponse)) {
+        final id = _normalizeBranchValue(row['employee_id']);
+        if (id.isNotEmpty) employeeMap[id] = Map<String, dynamic>.from(row);
+      }
+      records = _visibleMonthPayroll(
+        records,
+        employeeMap.values,
+        selectedPayrollMonth,
+      );
+      if (records.isEmpty) {
+        _message('No eligible employee payroll for the selected month.');
+        return;
+      }
+
+      final salaryResponse = await SupabaseService.database
+          .from('employee_salary_defaults')
+          .select()
+          .inFilter('employee_id', employeeIds);
+      final salaryMap = <String, Map<String, dynamic>>{};
+      for (final row in List<Map<String, dynamic>>.from(salaryResponse)) {
+        final id = _normalizeBranchValue(row['employee_id']);
+        if (id.isNotEmpty) salaryMap[id] = Map<String, dynamic>.from(row);
+      }
+
+      const sungaiPetaniForeignerGroup = '__SUNGAI_PETANI_FOREIGNER__';
+      const temporaryStaffGroup = '__TEMPORARY_STAFF__';
+
+      String canonicalBranchKey(String branchId) {
+        final raw = (branchNames[branchId] ?? branchId)
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z0-9]'), '');
+        const aliases = <String, String>{
+          'spedar': 'sungaipetani',
+          'hbsp': 'sungaipetani',
+          'hpspfrn': 'sungaipetani',
+          'hbspfrn': 'sungaipetani',
+          'hbperai': 'prai',
+          'hbperaifrn': 'prai',
+          'hbas': 'alorsetar',
+          'hbasfrn': 'alorsetar',
+          'hbjitra': 'jitra',
+          'hbjitrafrn': 'jitra',
+          'hbkulim': 'kulim',
+          'hbkulimfrn': 'kulim',
+          'hbastana': 'astana',
+          'hbastanafrn': 'astana',
+          'hbamj': 'amanjaya',
+          'hbamjfrn': 'amanjaya',
+          'hbgurun': 'gurun',
+          'hbgurunfrn': 'gurun',
+          'hblkw': 'langkawi',
+          'hblkwfrn': 'langkawi',
+        };
+        return aliases[raw] ?? raw;
+      }
+
+      final grouped = <String, List<Map<String, dynamic>>>{};
+      for (final row in records) {
+        final employeeId = _normalizeBranchValue(row['employee_id']);
+        final employee = employeeMap[employeeId];
+        final branchId = employee == null
+            ? _normalizeBranchValue(row['branch_id'])
+            : _payrollBranchIdFromEmployee(employee);
+        if (branchId.isEmpty) continue;
+        final isSungaiPetani = canonicalBranchKey(branchId) == 'sungaipetani';
+        final isForeigner =
+            employee?['address']?.toString().toUpperCase().contains('FRN') ==
+                true;
+        final isTemporary = employee?['is_temp_staff'] == true ||
+            employee?['is_temp_staff']?.toString().trim().toLowerCase() ==
+                'true' ||
+            employeeId.toUpperCase().contains('TEMP');
+        final groupId = isTemporary
+            ? temporaryStaffGroup
+            : isSungaiPetani && isForeigner
+                ? sungaiPetaniForeignerGroup
+                : branchId;
+        grouped.putIfAbsent(groupId, () => []).add(row);
+      }
+
+      if (grouped.isEmpty) {
+        _message('No branch information found for the selected payroll.');
+        return;
+      }
+
+      final excel = xls.Excel.createExcel();
+      final defaultSheet = excel.getDefaultSheet();
+
+      final headers = <String>[
+        'NO',
+        'EMPLOYEE ID',
+        'JOINING DATE',
+        'LAST INCREMENT',
+        'NEXT INCREMENT',
+        'NAME',
+        'NEW_IC_NO',
+        'BASIC + FW',
+        'ELAUN KEDATANGAN',
+        'ELAUN PERKHIDMATAN',
+        'ELAUN KERAJINAN',
+        'OVERTIME',
+        'CUTI UMUM',
+        'JUMLAH',
+        'M01 CUTI TANPA GAJI',
+        'EPF',
+        'SOCSO',
+        'EIS',
+        'POTONGAN',
+        'NET SALARY',
+      ];
+
+      String safeSheetName(String name, Set<String> used) {
+        var base = name.trim().isEmpty ? 'Branch' : name.trim();
+        base = base.replaceAll(RegExp(r'[\\/:*?\[\]]'), '_');
+        if (base.length > 31) base = base.substring(0, 31);
+        var result = base;
+        var n = 2;
+        while (used.contains(result.toLowerCase())) {
+          final suffix = ' ($n)';
+          final max = 31 - suffix.length;
+          result =
+              '${base.substring(0, base.length > max ? max : base.length)}$suffix';
+          n++;
+        }
+        used.add(result.toLowerCase());
+        return result;
+      }
+
+      final usedNames = <String>{};
+      const branchOrder = <String>[
+        'sungaipetani',
+        sungaiPetaniForeignerGroup,
+        temporaryStaffGroup,
+        'prai',
+        'alorsetar',
+        'jitra',
+        'kulim',
+        'astana',
+        'amanjaya',
+        'gurun',
+        'langkawi',
+      ];
+      const preferredSheetNames = <String, String>{
+        'sungaipetani': 'SP-EDAR',
+        'prai': 'Prai',
+        'alorsetar': 'AlorSetar',
+        'jitra': 'Jitra',
+        'kulim': 'Kulim',
+        'astana': 'Astana',
+        'amanjaya': 'Amanjaya',
+        'gurun': 'Gurun',
+        'langkawi': 'Langkawi',
+      };
+
+      String orderingKey(String branchId) => const {
+            sungaiPetaniForeignerGroup,
+            temporaryStaffGroup
+          }.contains(branchId)
+              ? branchId
+              : canonicalBranchKey(branchId);
+
+      final sortedBranchIds = grouped.keys.toList()
+        ..sort((a, b) {
+          final aIndex = branchOrder.indexOf(orderingKey(a));
+          final bIndex = branchOrder.indexOf(orderingKey(b));
+          final normalizedA = aIndex < 0 ? branchOrder.length : aIndex;
+          final normalizedB = bIndex < 0 ? branchOrder.length : bIndex;
+          if (normalizedA != normalizedB) {
+            return normalizedA.compareTo(normalizedB);
+          }
+          return (branchNames[a] ?? a)
+              .toLowerCase()
+              .compareTo((branchNames[b] ?? b).toLowerCase());
+        });
+
+      double money(dynamic value) => _payrollNumber(value);
+
+      String dateText(dynamic value) {
+        if (value == null) return '';
+        if (value is DateTime) return DateFormat('dd/MM/yyyy').format(value);
+        final text = value.toString().trim();
+        final parsed = DateTime.tryParse(text);
+        return parsed == null ? text : DateFormat('dd/MM/yyyy').format(parsed);
+      }
+
+      dynamic firstValue(Map<String, dynamic> row, List<String> keys) {
+        for (final key in keys) {
+          final v = row[key];
+          if (v != null && v.toString().trim().isNotEmpty) return v;
+        }
+        return null;
+      }
+
+      var isFirstSheet = true;
+      for (final branchId in sortedBranchIds) {
+        final branchName = branchId == sungaiPetaniForeignerGroup
+            ? 'SP-EDAR-Foreigner'
+            : branchId == temporaryStaffGroup
+                ? 'Temporary Staff'
+                : preferredSheetNames[canonicalBranchKey(branchId)] ??
+                    branchNames[branchId] ??
+                    branchId;
+        final sheetName = safeSheetName(branchName, usedNames);
+
+        xls.Sheet sheet;
+        if (isFirstSheet && defaultSheet != null) {
+          excel.rename(defaultSheet, sheetName);
+          sheet = excel[sheetName];
+          isFirstSheet = false;
+        } else {
+          sheet = excel[sheetName];
+        }
+        final branchRecords =
+            List<Map<String, dynamic>>.from(grouped[branchId]!)
+              ..sort((a, b) => _comparePayrollExportRecords(a, b, employeeMap));
+
+        sheet.cell(xls.CellIndex.indexByString('A1')).value =
+            xls.TextCellValue('PENYATA GAJI - ${branchName.toUpperCase()}');
+        sheet.cell(xls.CellIndex.indexByString('A2')).value = xls.TextCellValue(
+            DateFormat('MMM-yyyy').format(selectedPayrollMonth));
+
+        for (var c = 0; c < headers.length; c++) {
+          final cell = sheet.cell(xls.CellIndex.indexByColumnRow(
+            columnIndex: c,
+            rowIndex: 3,
+          ));
+          cell.value = xls.TextCellValue(headers[c]);
+        }
+
+        final columnTotals = List<double>.filled(headers.length, 0);
+        for (var i = 0; i < branchRecords.length; i++) {
+          final payroll = branchRecords[i];
+          final row = i + 4;
+          final employeeId = _normalizeBranchValue(payroll['employee_id']);
+          final employee = employeeMap[employeeId] ?? <String, dynamic>{};
+
+          final basic = money(payroll['basic_salary']);
+          final fw = money(payroll['fw_salary']);
+          final elaunKedatangan = money(payroll['elaun_kedatangan']);
+          final elaunPerkhidmatan = money(payroll['elaun_perkhidmatan']);
+          final elaunKerajinan = money(payroll['elaun_kerajinan']);
+          final overtime = money(payroll['overtime']);
+          final cutiUmum = money(payroll['cuti_umum']);
+          final jumlah = SavedPayrollAmounts.fromRow(payroll).gross;
+          final unpaid = money(payroll['unpaid_deduction']);
+          final late = money(payroll['late_deduction']);
+          final cutiTanpaGaji = unpaid + late;
+          final epf = money(payroll['epf_employee']);
+          final socso = money(payroll['socso_employee']);
+          final eis = money(payroll['eis_employee']);
+          final potongan = money(payroll['pcb']) +
+              money(payroll['zakat']) +
+              money(payroll['advance']);
+          final net = SavedPayrollAmounts.finalNetPay(payroll);
+
+          final values = <dynamic>[
+            i + 1,
+            employeeId,
+            dateText(employee['joining_date']),
+            _salaryIncrementText(
+                  employeeId,
+                  payroll['period'],
+                  defaultIncrementDetails: salaryMap[employeeId]
+                      ?['inc_details'],
+                ) ??
+                '',
+            _nextSalaryIncrementText(
+                  _salaryIncrementText(
+                        employeeId,
+                        payroll['period'],
+                        defaultIncrementDetails: salaryMap[employeeId]
+                            ?['inc_details'],
+                      ) ??
+                      '',
+                  employee['joining_date'],
+                ) ??
+                '',
+            employee['name'] ?? payroll['name'] ?? '',
+            employee['new_ic_no'] ?? payroll['new_ic_no'] ?? '',
+            fw != 0 ? fw : basic,
+            elaunKedatangan,
+            elaunPerkhidmatan,
+            elaunKerajinan,
+            overtime,
+            cutiUmum,
+            jumlah,
+            cutiTanpaGaji,
+            epf,
+            socso,
+            eis,
+            potongan,
+            net,
+          ];
+
+          for (var c = 0; c < values.length; c++) {
+            final cell = sheet.cell(xls.CellIndex.indexByColumnRow(
+              columnIndex: c,
+              rowIndex: row,
+            ));
+            final value = values[c];
+            if (value is num) {
+              columnTotals[c] += value.toDouble();
+              cell.value = xls.DoubleCellValue(value.toDouble());
+            } else {
+              cell.value = xls.TextCellValue(value.toString());
+            }
+          }
+        }
+
+        final totalRowIndex = 4 + branchRecords.length;
+        sheet
+            .cell(
+              xls.CellIndex.indexByColumnRow(
+                columnIndex: 0,
+                rowIndex: totalRowIndex,
+              ),
+            )
+            .value = xls.TextCellValue('TOTAL AMOUNT');
+        for (var column = 7; column < columnTotals.length; column++) {
+          sheet
+              .cell(
+                xls.CellIndex.indexByColumnRow(
+                  columnIndex: column,
+                  rowIndex: totalRowIndex,
+                ),
+              )
+              .value = xls.DoubleCellValue(columnTotals[column]);
+        }
+
+        final totalBorder = xls.Border(borderStyle: xls.BorderStyle.Thin);
+        for (var column = 0; column < columnTotals.length; column++) {
+          final cell = sheet.cell(
+            xls.CellIndex.indexByColumnRow(
+              columnIndex: column,
+              rowIndex: totalRowIndex,
+            ),
+          );
+          cell.cellStyle = (cell.cellStyle ?? xls.CellStyle()).copyWith(
+            boldVal: true,
+            topBorderVal: totalBorder,
+            bottomBorderVal: totalBorder,
+          );
+        }
+      }
+
+      final monthFile = DateFormat('yyyy_MM').format(selectedPayrollMonth);
+      final fileName = 'Penyata_Gaji_All_Branches_$monthFile.xlsx';
+      final output = excel.encode();
+      if (output == null || output.isEmpty) {
+        throw Exception('Excel file could not be generated.');
+      }
+
+      await FileSaver.instance.saveFile(
+        name: fileName.replaceFirst(RegExp(r'\.xlsx$'), ''),
+        bytes: Uint8List.fromList(output),
+        ext: 'xlsx',
+        mimeType: MimeType.microsoftExcel,
+      );
+
+      _message(
+          '$fileName exported successfully with ${sortedBranchIds.length} branch sheets.');
+    } catch (e) {
+      _message('All branches Excel export failed: $e');
+    }
+  }
+
+  Future<void> _exportPayrollBranchesPdf(
+    List<Map<String, dynamic>> records,
+    Map<String, String> branchNames,
+  ) async {
+    if (records.isEmpty) {
+      _message('No payroll records for the selected month.');
+      return;
+    }
+
+    try {
+      _message('Preparing payroll PDF by branch...');
+      final logo = await _loadHasaniBooksPdfLogo();
+      final employeeIds = records
+          .map((row) => _normalizeBranchValue(row['employee_id']))
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+      final employeeResponse = await SupabaseService.database
+          .from('employees')
+          .select()
+          .inFilter('employee_id', employeeIds);
+      final employeeMap = <String, Map<String, dynamic>>{};
+      for (final row in List<Map<String, dynamic>>.from(employeeResponse)) {
+        final id = _normalizeBranchValue(row['employee_id']);
+        if (id.isNotEmpty) employeeMap[id] = row;
+      }
+      records = _visibleMonthPayroll(
+        records,
+        employeeMap.values,
+        selectedPayrollMonth,
+      );
+      if (records.isEmpty) {
+        _message('No eligible employee payroll for the selected month.');
+        return;
+      }
+
+      final salaryResponse = await SupabaseService.database
+          .from('employee_salary_defaults')
+          .select()
+          .inFilter('employee_id', employeeIds);
+      final salaryMap = <String, Map<String, dynamic>>{};
+      for (final row in List<Map<String, dynamic>>.from(salaryResponse)) {
+        final id = _normalizeBranchValue(row['employee_id']);
+        if (id.isNotEmpty) salaryMap[id] = row;
+      }
+
+      String canonicalBranchKey(String branchId) {
+        final raw = (branchNames[branchId] ?? branchId)
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z0-9]'), '');
+        const aliases = <String, String>{
+          'spedar': 'sungaipetani',
+          'hbsp': 'sungaipetani',
+          'hpspfrn': 'sungaipetani',
+          'hbspfrn': 'sungaipetani',
+          'hbperai': 'prai',
+          'hbperaifrn': 'prai',
+          'hbas': 'alorsetar',
+          'hbasfrn': 'alorsetar',
+          'hbjitra': 'jitra',
+          'hbjitrafrn': 'jitra',
+          'hbkulim': 'kulim',
+          'hbkulimfrn': 'kulim',
+          'hbastana': 'astana',
+          'hbastanafrn': 'astana',
+          'hbamj': 'amanjaya',
+          'hbamjfrn': 'amanjaya',
+          'hbgurun': 'gurun',
+          'hbgurunfrn': 'gurun',
+          'hblkw': 'langkawi',
+          'hblkwfrn': 'langkawi',
+        };
+        return aliases[raw] ?? raw;
+      }
+
+      const branchOrder = <String>[
+        'sungaipetani',
+        '__SUNGAI_PETANI_FOREIGNER__',
+        '__TEMPORARY_STAFF__',
+        'prai',
+        'alorsetar',
+        'jitra',
+        'kulim',
+        'astana',
+        'amanjaya',
+        'gurun',
+        'langkawi',
+      ];
+      const branchLabels = <String, String>{
+        'sungaipetani': 'SP-EDAR',
+        '__SUNGAI_PETANI_FOREIGNER__': 'SP-EDAR - Foreign Staff',
+        '__TEMPORARY_STAFF__': 'Temporary Staff',
+        'prai': 'Prai',
+        'alorsetar': 'Alor Setar',
+        'jitra': 'Jitra',
+        'kulim': 'Kulim',
+        'astana': 'Astana',
+        'amanjaya': 'Amanjaya',
+        'gurun': 'Gurun',
+        'langkawi': 'Langkawi',
+      };
+      final grouped = <String, List<Map<String, dynamic>>>{};
+      for (final payroll in records) {
+        final employeeId = _normalizeBranchValue(payroll['employee_id']);
+        final employee = employeeMap[employeeId];
+        final branchId = employee == null
+            ? _normalizeBranchValue(payroll['branch_id'])
+            : _payrollBranchIdFromEmployee(employee);
+        if (branchId.isEmpty) continue;
+        final isForeign =
+            employee?['address']?.toString().toUpperCase().contains('FRN') ==
+                true;
+        final isTemporary = employee?['is_temp_staff'] == true ||
+            employee?['is_temp_staff']?.toString().trim().toLowerCase() ==
+                'true' ||
+            employeeId.toUpperCase().contains('TEMP');
+        final canonical = canonicalBranchKey(branchId);
+        final groupKey = isTemporary
+            ? '__TEMPORARY_STAFF__'
+            : canonical == 'sungaipetani' && isForeign
+                ? '__SUNGAI_PETANI_FOREIGNER__'
+                : canonical;
+        grouped.putIfAbsent(groupKey, () => []).add(payroll);
+      }
+      final keys = grouped.keys.toList()
+        ..sort((a, b) {
+          final ai = branchOrder.indexOf(a);
+          final bi = branchOrder.indexOf(b);
+          final ao = ai < 0 ? branchOrder.length : ai;
+          final bo = bi < 0 ? branchOrder.length : bi;
+          return ao == bo ? a.compareTo(b) : ao.compareTo(bo);
+        });
+      if (keys.isEmpty) {
+        _message('No branch information found for the selected payroll.');
+        return;
+      }
+
+      const headers = <String>[
+        'NO',
+        'ID STAF',
+        'TARIKH MASUK KERJA',
+        'KENAIKAN TERAKHIR',
+        'KENAIKAN SETERUSNYA',
+        'NAMA',
+        'NO IC / PASSPORT',
+        'GAJI',
+        'ELAUN KEDATANGAN',
+        'ELAUN PERKHIDMATAN',
+        'ELAUN KERAJINAN',
+        'OT',
+        'CUTI UMUM',
+        'JUMLAH',
+        'CUTI TANPA GAJI',
+        'KVSP',
+        'PERKESO',
+        'SIP',
+        'POTONGAN',
+        'JUMLAH BERSIH',
+      ];
+      double money(dynamic value) => _payrollNumber(value);
+      String pdfMoney(double value) =>
+          value.abs() < .001 ? '' : NumberFormat('#,##0.00').format(value);
+      String dateText(dynamic value) {
+        if (value == null) return '';
+        final text = value.toString().trim();
+        final parsed = DateTime.tryParse(text);
+        return parsed == null ? text : DateFormat('dd/MM/yyyy').format(parsed);
+      }
+
+      final document = pw.Document();
+      for (final key in keys) {
+        final branchRecords =
+            List<Map<String, dynamic>>.from(grouped[key] ?? const [])
+              ..sort((a, b) => _normalizeBranchValue(a['employee_id'])
+                  .compareTo(_normalizeBranchValue(b['employee_id'])));
+        final totals = List<double>.filled(headers.length, 0);
+        final data = <List<String>>[];
+        for (var index = 0; index < branchRecords.length; index++) {
+          final payroll = branchRecords[index];
+          final employeeId = _normalizeBranchValue(payroll['employee_id']);
+          final employee = employeeMap[employeeId] ?? <String, dynamic>{};
+          final basic = money(payroll['fw_salary']) != 0
+              ? money(payroll['fw_salary'])
+              : money(payroll['basic_salary']);
+          final attendance = money(payroll['elaun_kedatangan']);
+          final service = money(payroll['elaun_perkhidmatan']);
+          final diligence = money(payroll['elaun_kerajinan']);
+          final overtime = money(payroll['overtime']);
+          final publicHoliday = money(payroll['cuti_umum']);
+          final gross = SavedPayrollAmounts.fromRow(payroll).gross;
+          final unpaidLate = money(payroll['unpaid_deduction']) +
+              money(payroll['late_deduction']);
+          final epf = money(payroll['epf_employee']);
+          final socso = money(payroll['socso_employee']);
+          final eis = money(payroll['eis_employee']);
+          final other = money(payroll['pcb']) +
+              money(payroll['zakat']) +
+              money(payroll['advance']);
+          final net = SavedPayrollAmounts.finalNetPay(payroll);
+          final numbers = <double>[
+            basic,
+            attendance,
+            service,
+            diligence,
+            overtime,
+            publicHoliday,
+            gross,
+            unpaidLate,
+            epf,
+            socso,
+            eis,
+            other,
+            net,
+          ];
+          for (var i = 0; i < numbers.length; i++) {
+            totals[i + 7] += numbers[i];
+          }
+          data.add([
+            '${index + 1}',
+            employeeId,
+            dateText(employee['joining_date']),
+            _salaryIncrementText(employeeId, payroll['period']) ?? '',
+            _nextSalaryIncrementText(
+                  _salaryIncrementText(employeeId, payroll['period']) ?? '',
+                  employee['joining_date'],
+                ) ??
+                '',
+            (employee['name'] ?? payroll['name'] ?? '').toString(),
+            (employee['new_ic_no'] ?? payroll['new_ic_no'] ?? '').toString(),
+            ...numbers.map(pdfMoney),
+          ]);
+        }
+        data.add([
+          '',
+          '',
+          '',
+          '',
+          '',
+          'TOTAL',
+          '',
+          ...totals.skip(7).map(pdfMoney),
+        ]);
+        final branchName = branchLabels[key] ?? key;
+        const columnWidths = <int, pw.TableColumnWidth>{
+          0: pw.FlexColumnWidth(.35),
+          1: pw.FlexColumnWidth(.8),
+          2: pw.FlexColumnWidth(.9),
+          3: pw.FlexColumnWidth(.9),
+          4: pw.FlexColumnWidth(.9),
+          5: pw.FlexColumnWidth(2.2),
+          6: pw.FlexColumnWidth(1.15),
+          7: pw.FlexColumnWidth(.7),
+          8: pw.FlexColumnWidth(.65),
+          9: pw.FlexColumnWidth(.65),
+          10: pw.FlexColumnWidth(.65),
+          11: pw.FlexColumnWidth(.55),
+          12: pw.FlexColumnWidth(.55),
+          13: pw.FlexColumnWidth(.7),
+          14: pw.FlexColumnWidth(.7),
+          15: pw.FlexColumnWidth(.55),
+          16: pw.FlexColumnWidth(.55),
+          17: pw.FlexColumnWidth(.45),
+          18: pw.FlexColumnWidth(.65),
+          19: pw.FlexColumnWidth(.75),
+        };
+        document.addPage(pw.MultiPage(
+          pageFormat: PdfPageFormat.a4.landscape,
+          margin: const pw.EdgeInsets.fromLTRB(7, 6, 7, 8),
+          header: (_) => pw.Column(children: [
+            logo == null
+                ? pw.Text(
+                    'Payroll Company',
+                    textAlign: pw.TextAlign.center,
+                    style: pw.TextStyle(
+                      fontSize: 17,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  )
+                : pw.Center(
+                    child: pw.Image(
+                      logo,
+                      width: 112,
+                      height: 31,
+                      fit: pw.BoxFit.contain,
+                    ),
+                  ),
+            pw.SizedBox(height: 3),
+            pw.Text(
+              'PAYROLL - ${branchName.toUpperCase()} - ${DateFormat('MMMM yyyy').format(selectedPayrollMonth).toUpperCase()}',
+              textAlign: pw.TextAlign.center,
+              style: pw.TextStyle(
+                fontSize: 13.5,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 5),
+          ]),
+          build: (_) => [
+            pw.TableHelper.fromTextArray(
+              headers: headers,
+              data: data,
+              columnWidths: columnWidths,
+              headerStyle: pw.TextStyle(
+                fontSize: 6.2,
+                fontWeight: pw.FontWeight.bold,
+              ),
+              headerDecoration:
+                  const pw.BoxDecoration(color: PdfColors.grey200),
+              cellStyle: pw.TextStyle(
+                fontSize: data.length > 48 ? 5.7 : 6.5,
+              ),
+              textStyleBuilder: (_, __, rowNumber) => rowNumber == data.length
+                  ? pw.TextStyle(
+                      fontSize: data.length > 48 ? 5.7 : 6.5,
+                      fontWeight: pw.FontWeight.bold,
+                    )
+                  : null,
+              cellPadding: const pw.EdgeInsets.symmetric(
+                horizontal: 1.1,
+                vertical: .65,
+              ),
+              border: pw.TableBorder.all(color: PdfColors.grey700, width: .55),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.end,
+              children: [
+                pw.Text(
+                  'PREPARED BY : ANWAR',
+                  style: pw.TextStyle(
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(width: 48),
+                pw.Text(
+                  'APPROVED BY: ____________________',
+                  style: pw.TextStyle(
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ));
+      }
+      final monthFile = DateFormat('yyyy_MM').format(selectedPayrollMonth);
+      await FileSaver.instance.saveFile(
+        name: selectedPayrollBranchId == null
+            ? 'Payroll_All_Branches_$monthFile'
+            : 'Payroll_${keys.first}_$monthFile',
+        bytes: await document.save(),
+        ext: 'pdf',
+        mimeType: MimeType.pdf,
+      );
+      _message('Payroll PDF saved with ${keys.length} branch page(s).');
+    } catch (e) {
+      _message('Payroll PDF export failed: $e');
+    }
+  }
+
+  Uint8List _normalizeExcelTemplate(Uint8List bytes) {
+    final archive = ZipDecoder().decodeBytes(bytes);
+    final normalized = Archive();
+
+    for (final file in archive) {
+      if (file.name != 'xl/styles.xml') {
+        normalized.addFile(file);
+        continue;
+      }
+
+      final styles = String.fromCharCodes(file.content as List<int>);
+      final definitions = RegExp(
+        r'<numFmt\b[^>]*\bnumFmtId="(\d+)"[^>]*/>',
+      ).allMatches(styles).toList();
+      final usedIds = definitions
+          .map((match) => int.parse(match.group(1)!))
+          .where((id) => id >= 164)
+          .toSet();
+      final replacements = <int, int>{};
+      var nextId = 164;
+
+      for (final definition in definitions) {
+        final id = int.parse(definition.group(1)!);
+        if (id >= 164 || replacements.containsKey(id)) continue;
+        while (usedIds.contains(nextId)) {
+          nextId++;
+        }
+        replacements[id] = nextId;
+        usedIds.add(nextId);
+        nextId++;
+      }
+
+      var updatedStyles = styles;
+      for (final replacement in replacements.entries) {
+        updatedStyles = updatedStyles.replaceAll(
+          'numFmtId="${replacement.key}"',
+          'numFmtId="${replacement.value}"',
+        );
+      }
+      final styleBytes = utf8.encode(updatedStyles);
+      normalized.addFile(
+        ArchiveFile(file.name, styleBytes.length, styleBytes),
+      );
+    }
+
+    final encoded = ZipEncoder().encode(normalized);
+    return Uint8List.fromList(encoded);
+  }
+
+// ============================================================================
+// RHB / STATUTORY LAYOUT EXPORTS
+// One click generates four separate Excel files for the selected payroll month.
+
+  Future<List<Map<String, dynamic>>> _loadDashboardReportRows(
+      DateTime month) async {
+    final key = '${month.year}-${month.month.toString().padLeft(2, '0')}-'
+        '${service.currentUser?.staffScope ?? 'all'}-${selectedDashboardBranchId ?? 'all'}';
+    final existing = _dashboardReportCache[key];
+    final cachedAt = _dashboardReportCacheTime[key];
+    if (existing != null &&
+        (cachedAt == null ||
+            DateTime.now().difference(cachedAt) <
+                const Duration(seconds: 30))) {
+      return existing;
+    }
+    _dashboardReportCache.remove(key);
+    _dashboardReportCacheTime.remove(key);
+    final request = _fetchDashboardReportRows(month);
+    _dashboardReportCache[key] = request;
+    try {
+      final result = await request;
+      _dashboardReportCacheTime[key] = DateTime.now();
+      return result;
+    } catch (_) {
+      _dashboardReportCache.remove(key);
+      _dashboardReportCacheTime.remove(key);
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchDashboardReportRows(DateTime month,
+      {Set<String>? selectedEmployeeIds, bool allBranches = false}) async {
+    final source = await service.loadNeonAdminDashboard(month);
+    final results = ['payroll', 'employees', 'branches']
+        .map((key) => (source[key] as List)
+            .map((r) => Map<String, dynamic>.from(r as Map))
+            .toList())
+        .toList();
+    final scopedEmployeeRows = _scopedEmployeeRows(results[1]);
+    final scopedEmployeeIds = scopedEmployeeRows
+        .map((row) => _normalizeBranchValue(row['employee_id']))
+        .toSet();
+    final payroll = results[0]
+        .where((row) => _payrollPeriodMatchesMonth(row['period'], month))
+        .where((row) =>
+            selectedEmployeeIds == null ||
+            selectedEmployeeIds
+                .contains(_normalizeBranchValue(row['employee_id'])))
+        .where((row) =>
+            service.currentUser?.staffScope == null ||
+            scopedEmployeeIds
+                .contains(_normalizeBranchValue(row['employee_id'])))
+        .where((row) {
+          if (allBranches ||
+              selectedEmployeeIds != null ||
+              selectedDashboardBranchId == null) return true;
+          final own = _dashboardBranchKey(row['branch_id']);
+          final person = scopedEmployeeRows
+              .where((e) =>
+                  _dashboardBranchKey(e['employee_id']) ==
+                  _dashboardBranchKey(row['employee_id']))
+              .firstOrNull;
+          return (own.isNotEmpty
+                  ? own
+                  : _dashboardBranchKey(person == null
+                      ? ''
+                      : _payrollBranchIdFromEmployee(person))) ==
+              selectedDashboardBranchId;
+        })
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+    final employees = <String, Map<String, dynamic>>{};
+    for (final row in scopedEmployeeRows) {
+      employees[_normalizeBranchValue(row['employee_id'])] = row;
+    }
+    final branchNames = <String, String>{};
+    for (final row in results[2]) {
+      final id = _normalizeBranchValue(row['id'] ?? row['branch_id']);
+      if (id.isNotEmpty) {
+        branchNames[id] = (row['name'] ?? row['branch_name'] ?? id).toString();
+      }
+    }
+
+    final grouped = <String, Map<String, dynamic>>{};
+    for (final row in _visibleMonthPayroll(payroll, employees.values, month)) {
+      final employeeId = _normalizeBranchValue(row['employee_id']);
+      final employee = employees[employeeId] ?? <String, dynamic>{};
+      final payrollBranchId = _normalizeBranchValue(row['branch_id']);
+      final branchId = payrollBranchId.isNotEmpty
+          ? payrollBranchId
+          : _payrollBranchIdFromEmployee(employee);
+      final fallbackBranch = branchId.isEmpty ? 'Unassigned' : branchId;
+      final branch = branchNames[branchId] ??
+          (row['branch_name'] ?? fallbackBranch).toString();
+      final summary = grouped.putIfAbsent(
+          branch,
+          () => <String, dynamic>{
+                'branch': branch,
+                'employees': 0,
+                'malaysianEmployees': 0,
+                'basic': 0.0,
+                'overtime': 0.0,
+                'otherAllowances': 0.0,
+                'allowances': 0.0,
+                'gross': 0.0,
+                'epfEmployee': 0.0,
+                'epfEmployer': 0.0,
+                'socsoEmployee': 0.0,
+                'socsoEmployer': 0.0,
+                'eisEmployee': 0.0,
+                'eisEmployer': 0.0,
+                'excludedEpf': 0.0,
+                'excludedSocso': 0.0,
+                'excludedEis': 0.0,
+                for (final key in statutoryEmployeeCountKeys) key: 0,
+                'zeroEpfEmployees': <Map<String, dynamic>>[],
+                'zeroSocsoEmployees': <Map<String, dynamic>>[],
+                'unpaid': 0.0,
+                'pcb': 0.0,
+                'zakat': 0.0,
+                'advance': 0.0,
+                'deductions': 0.0,
+                'net': 0.0,
+                'hrdfBasic': 0.0,
+                'hrdfDeduction': 0.0,
+                'hrdfBase': 0.0,
+              });
+      summary['employees'] = (summary['employees'] as int) + 1;
+      final basic = _number(row['basic_salary']);
+      final allowances = _number(row['elaun_kedatangan']) +
+          _number(row['elaun_perkhidmatan']) +
+          _number(row['elaun_kerajinan']) +
+          _number(row['elaun_makanan']);
+      final gross = _payrollTotalEarnings(row);
+      final overtime = _number(row['overtime']);
+      final otherAllowances =
+          (gross - basic - overtime).clamp(0, double.infinity).toDouble();
+      final unpaid = _number(row['unpaid_deduction']);
+      final late = _number(row['late_deduction']);
+      final pcb = _number(row['pcb']);
+      final zakat = _number(row['zakat']);
+      final advance = _number(row['advance']);
+      final epfEmployee = _number(row['epf_employee']);
+      final epfEmployer = _number(row['epf_employer']);
+      final socsoEmployee = _number(row['socso_employee']);
+      final socsoEmployer = _number(row['socso_employer']);
+      final eisEmployee = _number(row['eis_employee']);
+      final eisEmployer = _number(row['eis_employer']);
+      for (final contribution in [
+        ('zeroEpfEmployees', epfEmployee, epfEmployer),
+        ('zeroSocsoEmployees', socsoEmployee, socsoEmployer),
+      ]) {
+        final zeroContributor = zeroStatutoryContributor(
+          employeeId: employeeId,
+          name: (employee['name'] ?? row['employee_name'] ?? row['name'] ?? '')
+              .toString(),
+          branch: branch,
+          employeeAmount: contribution.$2,
+          employerAmount: contribution.$3,
+        );
+        if (zeroContributor != null) {
+          (summary[contribution.$1] as List).add(zeroContributor);
+        }
+      }
+      final excludeEpf = excludeMissingEpfFromPayment(employee);
+      final excludeSocso = excludeMissingSocsoFromPayment(employee);
+      countStatutoryEmployee(
+          summary, 'epf', epfEmployee + epfEmployer, excludeEpf);
+      countStatutoryEmployee(
+          summary, 'socso', socsoEmployee + socsoEmployer, excludeSocso);
+      countStatutoryEmployee(
+          summary, 'eis', eisEmployee + eisEmployer, excludeSocso);
+      if (excludeEpf) {
+        summary['excludedEpf'] =
+            _number(summary['excludedEpf']) + epfEmployee + epfEmployer;
+      }
+      if (excludeSocso) {
+        summary['excludedSocso'] =
+            _number(summary['excludedSocso']) + socsoEmployee + socsoEmployer;
+        summary['excludedEis'] =
+            _number(summary['excludedEis']) + eisEmployee + eisEmployer;
+      }
+      final deductions = SavedPayrollAmounts.fromRow(row).deductions;
+      summary['basic'] = (summary['basic'] as double) + basic;
+      summary['overtime'] = (summary['overtime'] as double) + overtime;
+      summary['otherAllowances'] =
+          (summary['otherAllowances'] as double) + otherAllowances;
+      summary['allowances'] = (summary['allowances'] as double) + allowances;
+      summary['gross'] = (summary['gross'] as double) + gross;
+      summary['epfEmployee'] = (summary['epfEmployee'] as double) + epfEmployee;
+      summary['epfEmployer'] = (summary['epfEmployer'] as double) + epfEmployer;
+      summary['socsoEmployee'] =
+          (summary['socsoEmployee'] as double) + socsoEmployee;
+      summary['socsoEmployer'] =
+          (summary['socsoEmployer'] as double) + socsoEmployer;
+      summary['eisEmployee'] = (summary['eisEmployee'] as double) + eisEmployee;
+      summary['eisEmployer'] = (summary['eisEmployer'] as double) + eisEmployer;
+      summary['unpaid'] = (summary['unpaid'] as double) + unpaid;
+      summary['pcb'] = (summary['pcb'] as double) + pcb;
+      summary['zakat'] = (summary['zakat'] as double) + zakat;
+      summary['advance'] = (summary['advance'] as double) + advance;
+      summary['deductions'] = (summary['deductions'] as double) + deductions;
+      summary['net'] =
+          (summary['net'] as double) + SavedPayrollAmounts.finalNetPay(row);
+
+      final foreign = employee['address']
+              ?.toString()
+              .trim()
+              .toUpperCase()
+              .contains('FRN') ==
+          true;
+      final management = employee['is_management_staff'] == true ||
+          employee['is_management_staff']?.toString().trim().toLowerCase() ==
+              'true';
+      final temporary = employee['is_temp_staff'] == true ||
+          employee['is_temp_staff']?.toString().trim().toLowerCase() == 'true';
+      final support = employee['is_support_staff'] == true ||
+          employee['is_support_staff']?.toString().trim().toLowerCase() ==
+              'true';
+      if (!foreign && !management && !temporary && !support) {
+        summary['malaysianEmployees'] =
+            (summary['malaysianEmployees'] as int) + 1;
+        summary['hrdfBasic'] = (summary['hrdfBasic'] as double) + basic;
+        final hrdfDeduction = unpaid + late;
+        summary['hrdfDeduction'] =
+            (summary['hrdfDeduction'] as double) + hrdfDeduction;
+        summary['hrdfBase'] = (summary['hrdfBase'] as double) +
+            (basic - hrdfDeduction).clamp(0, double.infinity).toDouble();
+      }
+    }
+    final rows = grouped.values.toList()
+      ..sort(
+          (a, b) => a['branch'].toString().compareTo(b['branch'].toString()));
+    if (rows.isNotEmpty) {
+      final total = <String, dynamic>{
+        'branch': 'GRAND TOTAL',
+        'employees': 0,
+        'malaysianEmployees': 0,
+        'basic': 0.0,
+        'overtime': 0.0,
+        'otherAllowances': 0.0,
+        'allowances': 0.0,
+        'gross': 0.0,
+        'epfEmployee': 0.0,
+        'epfEmployer': 0.0,
+        'socsoEmployee': 0.0,
+        'socsoEmployer': 0.0,
+        'eisEmployee': 0.0,
+        'eisEmployer': 0.0,
+        'excludedEpf': 0.0,
+        'excludedSocso': 0.0,
+        'excludedEis': 0.0,
+        for (final key in statutoryEmployeeCountKeys) key: 0,
+        'unpaid': 0.0,
+        'pcb': 0.0,
+        'zakat': 0.0,
+        'advance': 0.0,
+        'deductions': 0.0,
+        'net': 0.0,
+        'hrdfBasic': 0.0,
+        'hrdfDeduction': 0.0,
+        'hrdfBase': 0.0,
+      };
+      const integerKeys = [
+        'employees',
+        'malaysianEmployees',
+        ...statutoryEmployeeCountKeys,
+      ];
+      const moneyKeys = [
+        'basic',
+        'overtime',
+        'otherAllowances',
+        'allowances',
+        'gross',
+        'epfEmployee',
+        'epfEmployer',
+        'socsoEmployee',
+        'socsoEmployer',
+        'eisEmployee',
+        'eisEmployer',
+        'excludedEpf',
+        'excludedSocso',
+        'excludedEis',
+        'unpaid',
+        'pcb',
+        'zakat',
+        'advance',
+        'deductions',
+        'net',
+        'hrdfBasic',
+        'hrdfDeduction',
+        'hrdfBase',
+      ];
+      for (final row in rows) {
+        for (final key in integerKeys) {
+          total[key] = (total[key] as int) + (row[key] as int);
+        }
+        for (final key in moneyKeys) {
+          total[key] = (total[key] as double) + _number(row[key]);
+        }
+      }
+      rows.add(total);
+    }
+    return rows;
+  }
+
+  Future<Map<String, dynamic>> _loadStatutoryReport(
+      String report, DateTime month) async {
+    final key = '$report-${month.year}-'
+        '${month.month.toString().padLeft(2, '0')}-'
+        '${service.currentUser?.staffScope ?? 'all'}';
+    final existing = _statutoryReportCache[key];
+    final cachedAt = _statutoryReportCacheTime[key];
+    if (existing != null &&
+        (cachedAt == null ||
+            DateTime.now().difference(cachedAt) <
+                const Duration(seconds: 30))) {
+      return existing;
+    }
+    _statutoryReportCache.remove(key);
+    _statutoryReportCacheTime.remove(key);
+    final request = _fetchStatutoryReport(report, month);
+    _statutoryReportCache[key] = request;
+    try {
+      final result = await request;
+      _statutoryReportCacheTime[key] = DateTime.now();
+      return result;
+    } catch (_) {
+      _statutoryReportCache.remove(key);
+      _statutoryReportCacheTime.remove(key);
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> _fetchStatutoryReport(
+      String report, DateTime month,
+      {Set<String>? selectedEmployeeIds}) async {
+    final payrollResponse = await SupabaseService.getPayrollForMonth(month);
+    final payrollRows = payrollResponse
+        .where((row) => _payrollPeriodMatchesMonth(row['period'], month))
+        .where((row) =>
+            selectedEmployeeIds == null ||
+            selectedEmployeeIds
+                .contains(_normalizeBranchValue(row['employee_id'])))
+        .toList();
+    if (payrollRows.isEmpty) {
+      return {'headers': <String>[], 'rows': <List<dynamic>>[]};
+    }
+
+    final employeeIds = payrollRows
+        .map((row) => _normalizeBranchValue(row['employee_id']))
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    final responses = await Future.wait([
+      SupabaseService.database
+          .from('employees')
+          .select()
+          .inFilter('employee_id', employeeIds),
+      SupabaseService.database
+          .from('employee_salary_defaults')
+          .select()
+          .inFilter('employee_id', employeeIds),
+    ]);
+    final employees = <String, Map<String, dynamic>>{};
+    for (final row in List<Map<String, dynamic>>.from(responses[0])) {
+      employees[_normalizeBranchValue(row['employee_id'])] = row;
+    }
+    final defaults = <String, Map<String, dynamic>>{};
+    for (final row in List<Map<String, dynamic>>.from(responses[1])) {
+      defaults[_normalizeBranchValue(row['employee_id'])] = row;
+    }
+
+    String firstText(Map<String, dynamic> row, List<String> keys) {
+      for (final key in keys) {
+        final text = row[key]?.toString().trim() ?? '';
+        if (text.isNotEmpty) return text;
+      }
+      return '';
+    }
+
+    final local = <List<dynamic>>[];
+    final foreign = <List<dynamic>>[];
+    final missingLocal = <List<dynamic>>[];
+    final missingForeign = <List<dynamic>>[];
+    for (final payroll
+        in _visibleMonthPayroll(payrollRows, employees.values, month)) {
+      final id = _normalizeBranchValue(payroll['employee_id']);
+      final employee = employees[id] ?? <String, dynamic>{};
+      final salaryDefault = defaults[id] ?? <String, dynamic>{};
+      final name =
+          firstText(employee, const ['name', 'employee_name']).isNotEmpty
+              ? firstText(employee, const ['name', 'employee_name'])
+              : firstText(payroll, const ['name', 'employee_name']);
+      final rawIc =
+          firstText(employee, const ['new_ic_no', 'newIcNo']).isNotEmpty
+              ? firstText(employee, const ['new_ic_no', 'newIcNo'])
+              : firstText(payroll, const ['new_ic_no', 'newIcNo']);
+      final defaultAddress =
+          firstText(salaryDefault, const ['address', 'Address', 'ADDRESS']);
+      final address = defaultAddress.isNotEmpty
+          ? defaultAddress
+          : firstText(employee, const ['address', 'Address', 'ADDRESS']);
+      final isForeign = address.toUpperCase().contains('FRN');
+      final firstName = firstText(employee, const ['first_name', 'firstName']);
+      final lastName = firstText(employee, const ['last_name', 'lastName']);
+      final statutoryName =
+          isForeign && firstName.isNotEmpty && lastName.isNotEmpty
+              ? '$lastName $firstName'
+              : name;
+      final icDigits = rawIc.replaceAll(RegExp(r'[^0-9]'), '');
+      final digitsOnly = RegExp(r'^\d+$').hasMatch(rawIc);
+      final exportIc = !isForeign && digitsOnly && rawIc.length < 12
+          ? rawIc.padLeft(12, '0')
+          : (icDigits.length == 12 ? icDigits : rawIc.replaceAll('-', ''));
+      final epfNo =
+          firstText(employee, const ['epf_no', 'epfNo', 'kwsp_no', 'kwspNo']);
+      final socsoNo = firstText(
+          employee, const ['socso_no', 'socsoNo', 'socso_number', 'SOCSO_NO']);
+      final localIcIdentifier =
+          !isForeign && icDigits.length == 12 ? exportIc : '';
+      final epfIdentifier = epfNo.isNotEmpty ? epfNo : localIcIdentifier;
+      final socsoIdentifier =
+          socsoNo.isNotEmpty ? socsoNo.replaceAll('-', '') : localIcIdentifier;
+      final epfEmployee =
+          _number(payroll['epf_employee'] ?? payroll['epfEmployee']);
+      final epfEmployer =
+          _number(payroll['epf_employer'] ?? payroll['epfEmployer']);
+      final socsoEmployee =
+          _number(payroll['socso_employee'] ?? payroll['socsoEmployee']);
+      final socsoEmployer =
+          _number(payroll['socso_employer'] ?? payroll['socsoEmployer']);
+      final eisEmployee =
+          _number(payroll['eis_employee'] ?? payroll['eisEmployee']);
+      final eisEmployer =
+          _number(payroll['eis_employer'] ?? payroll['eisEmployer']);
+
+      List<dynamic>? row;
+      var missingAccount = false;
+      if (report == 'EPF' && epfEmployee + epfEmployer > 0) {
+        missingAccount = epfIdentifier.isEmpty;
+        row = [
+          statutoryName,
+          exportIc,
+          missingAccount ? 'MISSING EPF NO / VALID IC' : epfIdentifier,
+          epfEmployee,
+          epfEmployer,
+          _epfReportSalary(payroll)
+        ];
+      } else if (report == 'SOCSO') {
+        final total = socsoEmployee + socsoEmployer;
+        if (total > 0) {
+          missingAccount = socsoIdentifier.isEmpty;
+          row = [
+            statutoryName,
+            missingAccount ? 'MISSING SOCSO NO / VALID IC' : socsoIdentifier,
+            socsoEmployee,
+            socsoEmployer,
+            total
+          ];
+        }
+      } else if (report == 'EIS' && eisEmployee + eisEmployer > 0) {
+        row = [
+          name,
+          exportIc,
+          eisEmployee,
+          eisEmployer,
+          eisEmployee + eisEmployer
+        ];
+      }
+      if (row != null) {
+        final target = missingAccount
+            ? (isForeign ? missingForeign : missingLocal)
+            : (isForeign ? foreign : local);
+        target.add(row);
+      }
+    }
+    int byName(List<dynamic> a, List<dynamic> b) => a.first
+        .toString()
+        .toLowerCase()
+        .compareTo(b.first.toString().toLowerCase());
+    local.sort(byName);
+    foreign.sort(byName);
+    missingLocal.sort(byName);
+    missingForeign.sort(byName);
+    final headers = report == 'EPF'
+        ? <String>[
+            'NAME',
+            'IC NO',
+            'EPF NO',
+            'EMPLOYEE SHARE',
+            'EMPLOYER SHARE',
+            'TOTAL SALARY'
+          ]
+        : report == 'SOCSO'
+            ? <String>[
+                'NAME',
+                'IC / SOCSO NO',
+                'EMPLOYEE SHARE',
+                'EMPLOYER SHARE',
+                'TOTAL AMOUNT'
+              ]
+            : <String>[
+                'NAME',
+                'IC NO',
+                'EMPLOYEE SHARE',
+                'EMPLOYER SHARE',
+                'TOTAL AMOUNT'
+              ];
+    return {
+      'headers': headers,
+      'rows': [...local, ...foreign],
+      'missingRows': [...missingLocal, ...missingForeign],
+    };
+  }
+
+  Future<void> _showStatutoryReport(String report,
+      {bool missingAccountOnly = false}) async {
+    var month = selectedPayrollMonth;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          insetPadding: const EdgeInsets.all(20),
+          child: SizedBox(
+            width: 1120,
+            height: MediaQuery.sizeOf(context).height * .82,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Expanded(
+                      child: Text(
+                          missingAccountOnly
+                              ? '$report Deducted - Missing Account Report'
+                              : '$report Employee Details',
+                          style: const TextStyle(
+                              fontSize: 24, fontWeight: FontWeight.w800)),
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.calendar_month_outlined),
+                      label: Text(DateFormat('MMMM yyyy').format(month)),
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: month,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                          helpText: 'Select payroll month',
+                        );
+                        if (picked != null) {
+                          setDialogState(() =>
+                              month = DateTime(picked.year, picked.month));
+                        }
+                      },
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ]),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Local employees are listed first, followed by foreign employees.',
+                    style: TextStyle(color: Colors.black54),
+                  ),
+                  const SizedBox(height: 14),
+                  Expanded(
+                    child: FutureBuilder<Map<String, dynamic>>(
+                      key: ValueKey('${report}_${month.year}_${month.month}'),
+                      future: _loadStatutoryReport(report, month),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError) {
+                          return Center(
+                              child: Text(
+                                  'Unable to load $report details: ${snapshot.error}'));
+                        }
+                        final headers = List<String>.from(
+                            snapshot.data?['headers'] ?? const []);
+                        final rows = List<List<dynamic>>.from(
+                            snapshot.data?['rows'] ?? const []);
+                        final missingRows = List<List<dynamic>>.from(
+                            snapshot.data?['missingRows'] ?? const []);
+                        final displayedRows =
+                            missingAccountOnly ? missingRows : rows;
+                        if (displayedRows.isEmpty &&
+                            (missingAccountOnly || missingRows.isEmpty)) {
+                          return Center(
+                              child: Text(missingAccountOnly
+                                  ? 'No employees have $report deductions with missing account details for ${DateFormat('MMMM yyyy').format(month)}.'
+                                  : 'No eligible $report payroll details for ${DateFormat('MMMM yyyy').format(month)}.'));
+                        }
+                        return Column(children: [
+                          Expanded(
+                            child: displayedRows.isEmpty
+                                ? Center(
+                                    child: Text(
+                                      'No employees with complete $report account details.\nOpen the separate Missing Account Report below.',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  )
+                                : Scrollbar(
+                                    child: SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: _statutoryDataTable(
+                                        headers,
+                                        displayedRows,
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(children: [
+                            Text('${displayedRows.length} employee(s)',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700)),
+                            const Spacer(),
+                            if (!missingAccountOnly &&
+                                (report == 'EPF' || report == 'SOCSO')) ...[
+                              OutlinedButton.icon(
+                                onPressed: () async {
+                                  Navigator.pop(dialogContext);
+                                  await _showStatutoryReport(report,
+                                      missingAccountOnly: true);
+                                },
+                                icon: const Icon(Icons.warning_amber_outlined),
+                                label: Text(
+                                    'Missing Account Report (${missingRows.length})'),
+                              ),
+                              const SizedBox(width: 10),
+                            ],
+                            if (report == 'EPF' ||
+                                report == 'SOCSO' ||
+                                report == 'EIS') ...[
+                              OutlinedButton.icon(
+                                onPressed: () => _printStatutoryReport(
+                                  report,
+                                  month,
+                                  headers,
+                                  displayedRows,
+                                  missingAccountOnly: missingAccountOnly,
+                                ),
+                                icon: const Icon(Icons.print_outlined),
+                                label: const Text('Print Landscape A4'),
+                              ),
+                              const SizedBox(width: 10),
+                            ],
+                            if (missingAccountOnly &&
+                                (report == 'EPF' || report == 'SOCSO'))
+                              FilledButton.icon(
+                                onPressed: () =>
+                                    _exportMissingStatutoryAccountsExcel(month),
+                                icon: const Icon(Icons.download_outlined),
+                                label: const Text(
+                                    'Export Missing EPF & SOCSO Excel'),
+                              ),
+                            if (!missingAccountOnly)
+                              FilledButton.icon(
+                                onPressed: () async {
+                                  if (report == 'EPF' || report == 'EIS') {
+                                    await _exportStatutoryReportExcel(
+                                        report, month, rows);
+                                  } else {
+                                    setState(
+                                        () => selectedPayrollMonth = month);
+                                    await _exportRhbLayout(
+                                        only: report.toLowerCase());
+                                  }
+                                },
+                                icon: const Icon(Icons.download_outlined),
+                                label: Text('Export $report Excel'),
+                              ),
+                          ]),
+                        ]);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _selectMissingStatutoryReportMonth() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selectedPayrollMonth,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      helpText: 'Select missing EPF/SOCSO report month',
+    );
+    if (picked == null || !mounted) return;
+    final month = DateTime(picked.year, picked.month);
+    await _showCombinedMissingStatutoryReport(month);
+  }
+
+  Future<void> _showCombinedMissingStatutoryReport(DateTime month) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.all(20),
+        child: SizedBox(
+          width: 1120,
+          height: MediaQuery.sizeOf(context).height * .82,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Expanded(
+                    child: Text(
+                      'Missing EPF & SOCSO - ${DateFormat('MMMM yyyy').format(month)}',
+                      style: const TextStyle(
+                          fontSize: 24, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    icon: const Icon(Icons.close),
+                  ),
+                ]),
+                const SizedBox(height: 6),
+                const Text(
+                  'Local staff use their valid 12-digit IC when an EPF or SOCSO number is unavailable.',
+                  style: TextStyle(color: Colors.black54),
+                ),
+                const SizedBox(height: 14),
+                Expanded(
+                  child: FutureBuilder<List<Map<String, dynamic>>>(
+                    future: Future.wait([
+                      _loadStatutoryReport('EPF', month),
+                      _loadStatutoryReport('SOCSO', month),
+                    ]),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                              'Unable to load missing statutory details: ${snapshot.error}'),
+                        );
+                      }
+                      final epfRows = List<List<dynamic>>.from(
+                          snapshot.data?[0]['missingRows'] ?? const []);
+                      final socsoRows = List<List<dynamic>>.from(
+                          snapshot.data?[1]['missingRows'] ?? const []);
+                      final epfDisplayRows = epfRows
+                          .map(
+                              (row) => [row[0], row[1], row[3], row[4], row[5]])
+                          .toList();
+                      final socsoDisplayRows = socsoRows
+                          .map((row) => [row[0], row[2], row[3], row[4]])
+                          .toList();
+                      if (epfRows.isEmpty && socsoRows.isEmpty) {
+                        return Center(
+                          child: Text(
+                              'No missing EPF or SOCSO details for ${DateFormat('MMMM yyyy').format(month)}.'),
+                        );
+                      }
+                      return Column(children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Missing EPF (${epfRows.length})',
+                                    style: const TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w800)),
+                                const SizedBox(height: 6),
+                                if (epfRows.isEmpty)
+                                  const Text('No missing EPF employees.')
+                                else
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: _statutoryDataTable(const [
+                                      'NAME',
+                                      'IC NO',
+                                      'EMPLOYEE SHARE',
+                                      'EMPLOYER SHARE',
+                                      'TOTAL SALARY',
+                                    ], epfDisplayRows),
+                                  ),
+                                const SizedBox(height: 20),
+                                Text('Missing SOCSO (${socsoRows.length})',
+                                    style: const TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w800)),
+                                const SizedBox(height: 6),
+                                if (socsoRows.isEmpty)
+                                  const Text('No missing SOCSO employees.')
+                                else
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: _statutoryDataTable(const [
+                                      'NAME',
+                                      'EMPLOYEE SHARE',
+                                      'EMPLOYER SHARE',
+                                      'TOTAL AMOUNT',
+                                    ], socsoDisplayRows),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(children: [
+                          Text(
+                            '${epfRows.length} EPF • ${socsoRows.length} SOCSO employee(s)',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const Spacer(),
+                          FilledButton.icon(
+                            onPressed: () =>
+                                _exportMissingStatutoryAccountsExcel(month),
+                            icon: const Icon(Icons.download_outlined),
+                            label:
+                                const Text('Export Missing EPF & SOCSO Excel'),
+                          ),
+                        ]),
+                      ]);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  DataTable _statutoryDataTable(
+      List<String> headers, List<List<dynamic>> rows) {
+    return DataTable(
+      headingRowColor: WidgetStatePropertyAll(Colors.grey.shade100),
+      columns: headers
+          .map((header) => DataColumn(
+                label: Text(header,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+              ))
+          .toList(),
+      rows: rows
+          .map((row) => DataRow(
+                cells: row
+                    .map((value) => DataCell(Text(value is num
+                        ? NumberFormat('#,##0.00').format(value)
+                        : value.toString())))
+                    .toList(),
+              ))
+          .toList(),
+    );
+  }
+
+  Future<pw.MemoryImage?> _loadHasaniBooksPdfLogo() async {
+    try {
+      final bytes = await rootBundle.load('assets/hasani_books_logo.jpg');
+      return pw.MemoryImage(bytes.buffer.asUint8List(
+        bytes.offsetInBytes,
+        bytes.lengthInBytes,
+      ));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  pw.Widget _brandedPdfHeader(
+    String title,
+    DateTime month,
+    DateTime printedAt,
+    pw.MemoryImage? logo,
+  ) =>
+      pw.Row(children: [
+        pw.Expanded(
+          child: pw.Align(
+            alignment: pw.Alignment.centerLeft,
+            child: logo == null
+                ? pw.Text('Payroll Company',
+                    style: pw.TextStyle(
+                        fontSize: 10, fontWeight: pw.FontWeight.bold))
+                : pw.Image(logo, width: 72, height: 28, fit: pw.BoxFit.contain),
+          ),
+        ),
+        pw.Expanded(
+          flex: 2,
+          child: pw.Text('$title - ${DateFormat('MMMM yyyy').format(month)}',
+              textAlign: pw.TextAlign.center,
+              style:
+                  pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+        ),
+        pw.Expanded(
+          child: pw.Text(
+              'Print Date: ${DateFormat('dd/MM/yyyy').format(printedAt)}',
+              textAlign: pw.TextAlign.right,
+              style: const pw.TextStyle(fontSize: 8)),
+        ),
+      ]);
+
+  pw.Widget _brandedPdfFooter(DateTime printedAt) => pw.Align(
+        alignment: pw.Alignment.bottomRight,
+        child: pw.Column(
+          mainAxisSize: pw.MainAxisSize.min,
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          children: [
+            pw.Text('Prepared by Admin',
+                style:
+                    pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 2),
+            pw.Text(DateFormat('dd/MM/yyyy hh:mm a').format(printedAt),
+                style: const pw.TextStyle(fontSize: 8)),
+          ],
+        ),
+      );
+
+  Future<void> _printStatutoryReport(String report, DateTime month,
+      List<String> headers, List<List<dynamic>> rows,
+      {bool missingAccountOnly = false}) async {
+    final document = pw.Document();
+    List<List<String>> printableRows(List<List<dynamic>> source) => [
+          headers,
+          ...source.map((row) => row
+              .map((value) => value is num
+                  ? NumberFormat('#,##0.00').format(value)
+                  : value.toString())
+              .toList()),
+        ];
+    document.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4.landscape,
+      margin: const pw.EdgeInsets.all(12),
+      build: (_) => [
+        pw.Text(
+            '${missingAccountOnly ? '$report Deducted - Missing Account Report' : '$report Employee Details'} - ${DateFormat('MMMM yyyy').format(month)}',
+            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 10),
+        _statutoryPdfTable(printableRows(rows)),
+      ],
+    ));
+    await Printing.layoutPdf(
+      name:
+          '$report${missingAccountOnly ? '_MISSING_ACCOUNT' : ''}_${DateFormat('yyyy_MM').format(month)}.pdf',
+      format: PdfPageFormat.a4.landscape,
+      onLayout: (_) => document.save(),
+    );
+  }
+
+  pw.Widget _statutoryPdfTable(List<List<String>> rows) =>
+      pw.TableHelper.fromTextArray(
+        data: rows,
+        headerCount: 1,
+        headerStyle:
+            pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+        cellStyle: const pw.TextStyle(fontSize: 7.5),
+        cellPadding: const pw.EdgeInsets.all(4),
+        border: pw.TableBorder.all(color: PdfColors.grey500, width: .35),
+      );
+
+  xls.CellStyle _excelHeaderStyle([xls.CellStyle? current]) {
+    final border = xls.Border(
+      borderStyle: xls.BorderStyle.Thin,
+      borderColorHex: xls.ExcelColor.fromHexString('FF6B86A5'),
+    );
+    return (current ?? xls.CellStyle()).copyWith(
+      boldVal: true,
+      fontSizeVal: 14,
+      horizontalAlignVal: xls.HorizontalAlign.Center,
+      verticalAlignVal: xls.VerticalAlign.Center,
+      textWrappingVal: xls.TextWrapping.WrapText,
+      backgroundColorHexVal: xls.ExcelColor.fromHexString('FFD9EAF7'),
+      leftBorderVal: border,
+      rightBorderVal: border,
+      topBorderVal: border,
+      bottomBorderVal: border,
+    );
+  }
+
+  String? _nextSalaryIncrementText(
+    String lastIncrementText, [
+    dynamic joiningDate,
+  ]) {
+    final text = lastIncrementText.trim().toUpperCase();
+
+    const monthNumbers = <String, int>{
+      'JAN': 1,
+      'FEB': 2,
+      'MAR': 3,
+      'APR': 4,
+      'MAY': 5,
+      'JUN': 6,
+      'JUL': 7,
+      'AUG': 8,
+      'SEP': 9,
+      'SEPT': 9,
+      'OCT': 10,
+      'NOV': 11,
+      'DEC': 12,
+    };
+    const monthNames = <String>[
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEPT',
+      'OCT',
+      'NOV',
+      'DEC',
+    ];
+
+    int? month;
+    int? year;
+    if (text.isEmpty) {
+      final rawJoiningDate = joiningDate?.toString().trim() ?? '';
+      final parsedJoiningDate = joiningDate is DateTime
+          ? joiningDate
+          : DateTime.tryParse(rawJoiningDate);
+      if (parsedJoiningDate != null) {
+        month = parsedJoiningDate.month;
+        year = parsedJoiningDate.year;
+      } else {
+        final date =
+            RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{4})').firstMatch(rawJoiningDate);
+        if (date != null) {
+          month = int.tryParse(date.group(2)!);
+          year = int.tryParse(date.group(3)!);
+        }
+      }
+    } else {
+      final monthYear = RegExp(r'^([A-Z]{3,4})-(\d{2}|\d{4})').firstMatch(text);
+      if (monthYear != null) {
+        month = monthNumbers[monthYear.group(1)];
+        year = int.tryParse(monthYear.group(2)!);
+        if (year != null && year < 100) year += 2000;
+      } else {
+        final date = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{4})').firstMatch(text);
+        if (date != null) {
+          month = int.tryParse(date.group(2)!);
+          year = int.tryParse(date.group(3)!);
+        }
+      }
+    }
+    if (month == null || year == null || month < 1 || month > 12) return null;
+
+    final next = DateTime(year, month + 6, 1);
+    final shortYear = (next.year % 100).toString().padLeft(2, '0');
+    return '${monthNames[next.month - 1]}-$shortYear';
+  }
+
+  bool _incrementDetailsMatchesMonth(dynamic value, DateTime month) {
+    final text = value?.toString().trim().toUpperCase() ?? '';
+    if (text.isEmpty) return false;
+    const monthNumbers = <String, int>{
+      'JAN': 1,
+      'FEB': 2,
+      'MAR': 3,
+      'APR': 4,
+      'MAY': 5,
+      'JUN': 6,
+      'JUL': 7,
+      'AUG': 8,
+      'SEP': 9,
+      'SEPT': 9,
+      'OCT': 10,
+      'NOV': 11,
+      'DEC': 12,
+    };
+    final match = RegExp(r'^([A-Z]{3,4})[-/](\d{2}|\d{4})').firstMatch(text);
+    if (match == null) return false;
+    final parsedMonth = monthNumbers[match.group(1)];
+    var parsedYear = int.tryParse(match.group(2)!);
+    if (parsedYear != null && parsedYear < 100) parsedYear += 2000;
+    return parsedMonth == month.month && parsedYear == month.year;
+  }
+
+  double? _incrementDetailsAmount(dynamic value) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isEmpty) return null;
+    final separator = text.lastIndexOf('/');
+    if (separator < 0 || separator == text.length - 1) return null;
+    return double.tryParse(text.substring(separator + 1).trim());
+  }
+
+  String? _salaryIncrementText(
+    String employeeId,
+    dynamic payrollPeriod, {
+    dynamic defaultIncrementDetails,
+  }) {
+    final currentPeriod = payrollPeriod is DateTime
+        ? payrollPeriod
+        : DateTime.tryParse(payrollPeriod?.toString() ?? '');
+    if (currentPeriod == null) return null;
+
+    // KENAIKAN TERAKHIR is not applicable to management staff.
+    final employee = service.employeeById(employeeId);
+    if (employee?.isManagementStaff == true) return null;
+
+    final incDetails = defaultIncrementDetails?.toString().trim() ?? '';
+    // Compare GAJI + ELAUN KEDATANGAN + ELAUN PERKHIDMATAN + ELAUN KERAJINAN
+    // with the highest normal total in the previous seven months. Lower or
+    // missing vacation months are skipped by the shared calculation rule.
+    final payrollHistory = service.employeePayroll(employeeId);
+    final difference = PayrollCalculationService.payrollIncrementForMonth(
+      payrollHistory
+          .map(
+            (record) => (
+              period: record.period,
+              basicSalary: record.basicSalary,
+              attendanceAllowance: record.elaunKedatangan,
+              serviceAllowance: record.elaunPerkhidmatan,
+              diligenceAllowance: record.elaunKerajinan,
+            ),
+          )
+          .toList(),
+      currentPeriod,
+    );
+
+    if (difference != null) {
+      const monthNames = [
+        'JAN',
+        'FEB',
+        'MAR',
+        'APR',
+        'MAY',
+        'JUN',
+        'JUL',
+        'AUG',
+        'SEPT',
+        'OCT',
+        'NOV',
+        'DEC',
+      ];
+      final year = (currentPeriod.year % 100).toString().padLeft(2, '0');
+      final amount = difference.toStringAsFixed(0);
+      return '${monthNames[currentPeriod.month - 1]}-$year/$amount';
+    }
+
+    // No increment in the generated month: keep a valid maintained increment.
+    final maintainedAmount = _incrementDetailsAmount(incDetails);
+    return maintainedAmount != null &&
+            PayrollCalculationService.isValidPayrollIncrementAmount(
+              maintainedAmount,
+            )
+        ? incDetails
+        : null;
+  }
+
+  Future<void> _exportStatutoryReportExcel(
+      String report, DateTime month, List<List<dynamic>> rows,
+      {void Function(String, Uint8List)? onFile}) async {
+    final excel = xls.Excel.createExcel();
+    final defaultName = excel.getDefaultSheet();
+    if (defaultName != null) excel.rename(defaultName, report);
+    final sheet = excel[report];
+    for (var row = 0; row < rows.length; row++) {
+      for (var column = 0; column < rows[row].length; column++) {
+        final cell = sheet.cell(
+            xls.CellIndex.indexByColumnRow(columnIndex: column, rowIndex: row));
+        final value = rows[row][column];
+        cell.value = value is num
+            ? xls.DoubleCellValue(value.toDouble())
+            : xls.TextCellValue(value.toString());
+      }
+    }
+    final output = excel.encode();
+    if (output == null) throw Exception('Excel file could not be generated.');
+    if (onFile != null) {
+      onFile('${report}_${DateFormat('yyyy_MM').format(month)}.xlsx',
+          Uint8List.fromList(output));
+    } else
+      await FileSaver.instance.saveFile(
+        name: '${report}_${DateFormat('yyyy_MM').format(month)}',
+        bytes: Uint8List.fromList(output),
+        ext: 'xlsx',
+        mimeType: MimeType.microsoftExcel,
+      );
+    _message('$report Excel exported successfully.');
+  }
+
+  Future<void> _exportMissingStatutoryAccountsExcel(DateTime month) async {
+    try {
+      final reports = await Future.wait([
+        _loadStatutoryReport('EPF', month),
+        _loadStatutoryReport('SOCSO', month),
+      ]);
+      final epfRows = List<List<dynamic>>.from(
+          reports[0]['missingRows'] ?? const <List<dynamic>>[]);
+      final socsoRows = List<List<dynamic>>.from(
+          reports[1]['missingRows'] ?? const <List<dynamic>>[]);
+
+      final excel = xls.Excel.createExcel();
+      final defaultName = excel.getDefaultSheet();
+      if (defaultName != null) excel.rename(defaultName, 'Missing EPF');
+
+      void writeSheet({
+        required String name,
+        required String title,
+        required List<String> headers,
+        required List<List<dynamic>> rows,
+        required Set<int> moneyColumns,
+      }) {
+        final sheet = excel[name];
+        sheet.merge(
+          xls.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
+          xls.CellIndex.indexByColumnRow(
+              columnIndex: headers.length - 1, rowIndex: 0),
+        );
+        final titleCell = sheet
+            .cell(xls.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0));
+        titleCell.value = xls.TextCellValue(title);
+        titleCell.cellStyle = xls.CellStyle(bold: true, fontSize: 14);
+
+        for (var column = 0; column < headers.length; column++) {
+          final headerCell = sheet.cell(
+              xls.CellIndex.indexByColumnRow(columnIndex: column, rowIndex: 2));
+          headerCell.value = xls.TextCellValue(headers[column]);
+          headerCell.cellStyle = _excelHeaderStyle(headerCell.cellStyle);
+          sheet.setColumnWidth(column, column == 0 ? 32 : 20);
+        }
+
+        for (var rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+          for (var column = 0; column < rows[rowIndex].length; column++) {
+            final cell = sheet.cell(xls.CellIndex.indexByColumnRow(
+                columnIndex: column, rowIndex: rowIndex + 3));
+            final value = rows[rowIndex][column];
+            cell.value = value is num
+                ? xls.DoubleCellValue(value.toDouble())
+                : xls.TextCellValue(value.toString());
+            if (moneyColumns.contains(column)) {
+              cell.cellStyle = (cell.cellStyle ?? xls.CellStyle()).copyWith(
+                numberFormat: xls.NumFormat.custom(formatCode: '#,##0.00'),
+              );
+            }
+          }
+        }
+      }
+
+      writeSheet(
+        name: 'Missing EPF',
+        title:
+            'EPF Deducted - Missing Account Report - ${DateFormat('MMMM yyyy').format(month)}',
+        headers: const [
+          'NAME',
+          'IC NO',
+          'EMPLOYEE SHARE',
+          'EMPLOYER SHARE',
+          'TOTAL SALARY',
+        ],
+        rows: epfRows
+            .map((row) => [row[0], row[1], row[3], row[4], row[5]])
+            .toList(),
+        moneyColumns: const {2, 3, 4},
+      );
+      writeSheet(
+        name: 'Missing SOCSO',
+        title:
+            'SOCSO Deducted - Missing Account Report - ${DateFormat('MMMM yyyy').format(month)}',
+        headers: const [
+          'NAME',
+          'EMPLOYEE SHARE',
+          'EMPLOYER SHARE',
+          'TOTAL AMOUNT',
+        ],
+        rows: socsoRows.map((row) => [row[0], row[2], row[3], row[4]]).toList(),
+        moneyColumns: const {1, 2, 3},
+      );
+
+      final output = excel.encode();
+      if (output == null || output.isEmpty) {
+        throw Exception('Missing-account Excel file could not be generated.');
+      }
+      await FileSaver.instance.saveFile(
+        name: 'MISSING_EPF_SOCSO_${DateFormat('yyyy_MM').format(month)}',
+        bytes: Uint8List.fromList(output),
+        ext: 'xlsx',
+        mimeType: MimeType.microsoftExcel,
+      );
+      _message(
+          'Missing EPF and SOCSO Excel exported with ${epfRows.length} EPF and ${socsoRows.length} SOCSO employee(s).');
+    } catch (e) {
+      _message('Missing EPF and SOCSO Excel export failed: $e');
+    }
+  }
+
+  Future<void> _showDashboardReport(String report) async {
+    var month = selectedPayrollMonth;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          insetPadding: const EdgeInsets.all(20),
+          child: SizedBox(
+            width: 1180,
+            height: MediaQuery.sizeOf(context).height * .82,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Expanded(
+                      child: Text('$report Preview',
+                          style: const TextStyle(
+                              fontSize: 24, fontWeight: FontWeight.w800)),
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.calendar_month_outlined),
+                      label: Text(DateFormat('MMMM yyyy').format(month)),
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: month,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                          helpText: 'Select report month',
+                        );
+                        if (picked != null) {
+                          setDialogState(() =>
+                              month = DateTime(picked.year, picked.month));
+                        }
+                      },
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
+                  Text(_reportDescription(report),
+                      style: const TextStyle(color: Colors.black54)),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: FutureBuilder<List<Map<String, dynamic>>>(
+                      key: ValueKey('${report}_${month.year}_${month.month}'),
+                      future: _loadDashboardReportRows(month),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError) {
+                          return Center(
+                              child: Text(
+                                  'Unable to load report: ${snapshot.error}'));
+                        }
+                        final rows = snapshot.data ?? const [];
+                        if (rows.isEmpty) {
+                          return const Center(
+                              child:
+                                  Text('No payroll records for this month.'));
+                        }
+                        return Column(children: [
+                          Expanded(
+                              child: _dashboardReportPreview(report, rows)),
+                          const SizedBox(height: 12),
+                          Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                if (report == 'HRDF' ||
+                                    report == 'Payroll Summary')
+                                  OutlinedButton.icon(
+                                    onPressed: () => _printDashboardReport(
+                                        report, month, rows),
+                                    icon: const Icon(Icons.print_outlined),
+                                    label: const Text('Print Landscape A4'),
+                                  ),
+                                if (report == 'HRDF' ||
+                                    report == 'Payroll Summary')
+                                  const SizedBox(width: 10),
+                                FilledButton.icon(
+                                  onPressed: () async {
+                                    setState(
+                                        () => selectedPayrollMonth = month);
+                                    if (const ['EPF', 'SOCSO', 'EIS']
+                                        .contains(report)) {
+                                      await _exportRhbLayout(
+                                          only: report.toLowerCase());
+                                    } else if (report == 'Payroll') {
+                                      await _exportRhbLayout(only: 'rhb');
+                                    } else {
+                                      await _exportDashboardSummaryExcel(
+                                          report, month, rows);
+                                    }
+                                  },
+                                  icon: const Icon(Icons.download_outlined),
+                                  label: const Text('Export Excel'),
+                                ),
+                              ]),
+                        ]);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _reportDescription(String report) => report == 'HRDF'
+      ? 'Eligible Malaysian employee count, basic salary, attendance deductions, levy base after deductions, and the 1% HRDF levy.'
+      : report == 'Payroll Summary'
+          ? 'Branch totals for earnings, statutory contributions, deductions and net payroll.'
+          : report == 'Payroll'
+              ? 'Branch employee count, basic salary, allowances, gross pay, deductions and net pay.'
+              : '$report records use the same payroll calculations and eligibility rules as RHB Layout.';
+
+  List<String> _dashboardReportHeaders(String report) {
+    if (report == 'HRDF') {
+      return const [
+        'BRANCH',
+        'MALAYSIAN STAFF',
+        'BASIC SALARY',
+        'DEDUCTION',
+        'LEVY BASE',
+        'LEVY 1%'
+      ];
+    }
+    if (report == 'Payroll Summary') {
+      return const [
+        'BRANCH',
+        'STAFF',
+        'BASIC',
+        'OVERTIME',
+        'ALLOWANCE',
+        'GROSS PAY',
+        'EPF EE',
+        'EPF ER',
+        'TOTAL EPF',
+        'SOCSO EE',
+        'SOCSO ER',
+        'TOTAL SOCSO',
+        'EIS EE',
+        'EIS ER',
+        'TOTAL EIS',
+        'UNPAID LEAVE',
+        'PCB',
+        'ZAKAT',
+        'ADVANCE',
+        'HRDF',
+        'GROSS DEDUCTION',
+        'NET PAY'
+      ];
+    }
+    return const [
+      'BRANCH',
+      'EMPLOYEES',
+      'BASIC SALARY',
+      'ALLOWANCES',
+      'GROSS PAY',
+      'DEDUCTIONS',
+      'NET PAY'
+    ];
+  }
+
+  List<dynamic> _dashboardReportValues(
+      String report, Map<String, dynamic> row) {
+    if (report == 'HRDF') {
+      final base = _number(row['hrdfBase']);
+      return [
+        row['branch'],
+        row['malaysianEmployees'],
+        row['hrdfBasic'],
+        row['hrdfDeduction'],
+        base,
+        base * .01
+      ];
+    }
+    if (report == 'Payroll Summary') {
+      return [
+        row['branch'],
+        row['employees'],
+        row['basic'],
+        row['overtime'],
+        row['otherAllowances'],
+        row['gross'],
+        row['epfEmployee'],
+        row['epfEmployer'],
+        _number(row['epfEmployee']) + _number(row['epfEmployer']),
+        row['socsoEmployee'],
+        row['socsoEmployer'],
+        _number(row['socsoEmployee']) + _number(row['socsoEmployer']),
+        row['eisEmployee'],
+        row['eisEmployer'],
+        _number(row['eisEmployee']) + _number(row['eisEmployer']),
+        row['unpaid'],
+        row['pcb'],
+        row['zakat'],
+        row['advance'],
+        _number(row['hrdfBase']) * .01,
+        row['deductions'],
+        row['net']
+      ];
+    }
+    return [
+      row['branch'],
+      row['employees'],
+      row['basic'],
+      row['allowances'],
+      row['gross'],
+      row['deductions'],
+      row['net']
+    ];
+  }
+
+  Widget _dashboardReportPreview(
+      String report, List<Map<String, dynamic>> rows) {
+    final headers = _dashboardReportHeaders(report);
+    return Scrollbar(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SingleChildScrollView(
+          child: DataTable(
+            headingRowColor: WidgetStatePropertyAll(Colors.grey.shade100),
+            columns: headers
+                .map((header) => DataColumn(
+                    label: Text(header,
+                        style: const TextStyle(fontWeight: FontWeight.w700))))
+                .toList(),
+            rows: rows.map((row) {
+              final values = _dashboardReportValues(report, row);
+              final isGrandTotal = row['branch'] == 'GRAND TOTAL';
+              const payrollTotalColumns = {8, 11, 14};
+              return DataRow(
+                  cells: values.asMap().entries.map((entry) {
+                final value = entry.value;
+                final text = entry.key >= 2 && value is num
+                    ? NumberFormat('#,##0.00').format(value)
+                    : value.toString();
+                final bold = isGrandTotal ||
+                    (report == 'Payroll Summary' &&
+                        (entry.key == 0 ||
+                            payrollTotalColumns.contains(entry.key)));
+                return DataCell(Text(
+                  text,
+                  style: bold
+                      ? const TextStyle(fontWeight: FontWeight.w800)
+                      : null,
+                ));
+              }).toList());
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportDashboardSummaryExcel(
+      String report, DateTime month, List<Map<String, dynamic>> rows,
+      {void Function(String, Uint8List)? onFile}) async {
+    final printedAt = DateTime.now();
+    final excel = xls.Excel.createExcel();
+    final defaultName = excel.getDefaultSheet();
+    final sheetName = report == 'Payroll Summary' ? 'Payroll Summary' : report;
+    if (defaultName != null) excel.rename(defaultName, sheetName);
+    final sheet = excel[sheetName];
+    final headers = _dashboardReportHeaders(report);
+    sheet.merge(
+      xls.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
+      xls.CellIndex.indexByColumnRow(
+          columnIndex: headers.length - 1, rowIndex: 0),
+    );
+    final titleCell =
+        sheet.cell(xls.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0));
+    titleCell.value = xls.TextCellValue(
+        'Payroll Company    $report - ${DateFormat('MMMM yyyy').format(month)}    Print Date: ${DateFormat('dd/MM/yyyy').format(printedAt)}');
+    titleCell.cellStyle = xls.CellStyle(bold: true, fontSize: 14);
+    for (var column = 0; column < headers.length; column++) {
+      final cell = sheet.cell(
+          xls.CellIndex.indexByColumnRow(columnIndex: column, rowIndex: 2));
+      cell.value = xls.TextCellValue(headers[column]);
+      cell.cellStyle = _excelHeaderStyle(cell.cellStyle);
+    }
+    const payrollTotalColumns = {8, 11, 14};
+    for (var rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      final values = _dashboardReportValues(report, rows[rowIndex]);
+      final isGrandTotal = rows[rowIndex]['branch'] == 'GRAND TOTAL';
+      for (var column = 0; column < values.length; column++) {
+        final cell = sheet.cell(xls.CellIndex.indexByColumnRow(
+            columnIndex: column, rowIndex: rowIndex + 3));
+        final value = values[column];
+        cell.value = value is num
+            ? xls.DoubleCellValue(value.toDouble())
+            : xls.TextCellValue(value.toString());
+        if (isGrandTotal ||
+            (report == 'Payroll Summary' &&
+                (column == 0 || payrollTotalColumns.contains(column)))) {
+          cell.cellStyle = xls.CellStyle(bold: true);
+        }
+      }
+    }
+    final footerRow = rows.length + 5;
+    sheet.merge(
+      xls.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: footerRow),
+      xls.CellIndex.indexByColumnRow(
+          columnIndex: headers.length - 1, rowIndex: footerRow),
+    );
+    final footerCell = sheet.cell(
+        xls.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: footerRow));
+    footerCell.value = xls.TextCellValue(
+        'Prepared by Admin | ${DateFormat('dd/MM/yyyy hh:mm a').format(printedAt)}');
+    footerCell.cellStyle = xls.CellStyle(bold: true);
+    final output = excel.encode();
+    if (output == null) throw Exception('Excel file could not be generated.');
+    if (onFile != null) {
+      onFile(
+          '${report.replaceAll(' ', '_')}_${DateFormat('yyyy_MM').format(month)}.xlsx',
+          Uint8List.fromList(output));
+    } else
+      await FileSaver.instance.saveFile(
+        name:
+            '${report.replaceAll(' ', '_')}_${DateFormat('yyyy_MM').format(month)}',
+        bytes: Uint8List.fromList(output),
+        ext: 'xlsx',
+        mimeType: MimeType.microsoftExcel,
+      );
+    _message('$report Excel exported successfully.');
+  }
+
+  Future<void> _printDashboardReport(
+      String report, DateTime month, List<Map<String, dynamic>> rows) async {
+    final printedAt = DateTime.now();
+    pw.MemoryImage? hasaniBooksLogo;
+    if (report == 'Payroll Summary' || report == 'HRDF') {
+      hasaniBooksLogo = await _loadHasaniBooksPdfLogo();
+    }
+    final headers = _dashboardReportHeaders(report);
+    final data = rows
+        .map((row) => _dashboardReportValues(report, row)
+            .asMap()
+            .entries
+            .map((entry) => entry.value is num && entry.key != 1
+                ? NumberFormat('#,##0.00').format(entry.value)
+                : entry.value.toString())
+            .toList())
+        .toList();
+    pw.Widget buildContent() => pw.Column(
+          mainAxisSize: report == 'Payroll Summary'
+              ? pw.MainAxisSize.min
+              : pw.MainAxisSize.max,
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            if (report == 'Payroll Summary' || report == 'HRDF')
+              pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  pw.Expanded(
+                    child: pw.Align(
+                      alignment: pw.Alignment.centerLeft,
+                      child: hasaniBooksLogo == null
+                          ? pw.Text(
+                              'Payroll Company',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                fontWeight: pw.FontWeight.bold,
+                              ),
+                            )
+                          : pw.Image(
+                              hasaniBooksLogo,
+                              width: 72,
+                              height: 28,
+                              fit: pw.BoxFit.contain,
+                            ),
+                    ),
+                  ),
+                  pw.Expanded(
+                    flex: 2,
+                    child: pw.Text(
+                      '$report - ${DateFormat('MMMM yyyy').format(month)}',
+                      textAlign: pw.TextAlign.center,
+                      style: pw.TextStyle(
+                        fontSize: 15,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  pw.Expanded(
+                    child: pw.Text(
+                      'Print Date: ${DateFormat('dd/MM/yyyy').format(printedAt)}',
+                      textAlign: pw.TextAlign.right,
+                      style: const pw.TextStyle(fontSize: 8),
+                    ),
+                  ),
+                ],
+              )
+            else
+              pw.Text('$report - ${DateFormat('MMMM yyyy').format(month)}',
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(
+                      fontSize: 15, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 10),
+            if (report == 'Payroll Summary')
+              pw.Table(
+                border: pw.TableBorder.all(
+                  color: PdfColors.grey500,
+                  width: .35,
+                ),
+                columnWidths: {
+                  0: const pw.FlexColumnWidth(1.8),
+                  1: const pw.FlexColumnWidth(.55),
+                  2: const pw.FlexColumnWidth(1),
+                  3: const pw.FlexColumnWidth(.9),
+                  4: const pw.FlexColumnWidth(1.15),
+                  5: const pw.FlexColumnWidth(1.15),
+                  6: const pw.FlexColumnWidth(.85),
+                  7: const pw.FlexColumnWidth(.85),
+                  8: const pw.FlexColumnWidth(.95),
+                  9: const pw.FlexColumnWidth(.85),
+                  10: const pw.FlexColumnWidth(.85),
+                  11: const pw.FlexColumnWidth(.95),
+                  12: const pw.FlexColumnWidth(.8),
+                  13: const pw.FlexColumnWidth(.8),
+                  14: const pw.FlexColumnWidth(.9),
+                  15: const pw.FlexColumnWidth(1),
+                  16: const pw.FlexColumnWidth(.75),
+                  17: const pw.FlexColumnWidth(.8),
+                  18: const pw.FlexColumnWidth(.8),
+                  19: const pw.FlexColumnWidth(.8),
+                  20: const pw.FlexColumnWidth(1.15),
+                  21: const pw.FlexColumnWidth(1.1),
+                },
+                children: [
+                  pw.TableRow(
+                    decoration:
+                        const pw.BoxDecoration(color: PdfColors.grey200),
+                    children: headers
+                        .map((header) => pw.Container(
+                              padding: const pw.EdgeInsets.symmetric(
+                                horizontal: .5,
+                                vertical: 6,
+                              ),
+                              alignment: pw.Alignment.center,
+                              child: pw.Text(
+                                header,
+                                textAlign: pw.TextAlign.center,
+                                style: pw.TextStyle(
+                                  fontSize: 6.5,
+                                  fontWeight: pw.FontWeight.bold,
+                                ),
+                              ),
+                            ))
+                        .toList(),
+                  ),
+                  ...data.asMap().entries.map((rowEntry) {
+                    final isGrandTotal =
+                        rows[rowEntry.key]['branch'] == 'GRAND TOTAL';
+                    const totalColumns = {8, 11, 14};
+                    return pw.TableRow(
+                      decoration: isGrandTotal
+                          ? const pw.BoxDecoration(color: PdfColors.grey200)
+                          : null,
+                      children: rowEntry.value.asMap().entries.map((entry) {
+                        final bold = isGrandTotal ||
+                            entry.key == 0 ||
+                            totalColumns.contains(entry.key);
+                        return pw.Container(
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: .5,
+                            vertical: 5,
+                          ),
+                          alignment: entry.key == 0
+                              ? pw.Alignment.centerLeft
+                              : pw.Alignment.center,
+                          child: entry.key != 0
+                              ? payrollSummarySingleLine(entry.value,
+                                  bold: bold)
+                              : pw.Text(
+                                  entry.value,
+                                  textAlign: entry.key == 0
+                                      ? pw.TextAlign.left
+                                      : pw.TextAlign.center,
+                                  style: pw.TextStyle(
+                                    fontSize: 7.2,
+                                    fontWeight: bold
+                                        ? pw.FontWeight.bold
+                                        : pw.FontWeight.normal,
+                                  ),
+                                ),
+                        );
+                      }).toList(),
+                    );
+                  }),
+                ],
+              )
+            else
+              pw.TableHelper.fromTextArray(
+                headers: headers,
+                data: data,
+                headerStyle:
+                    pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold),
+                cellStyle: const pw.TextStyle(fontSize: 5.5),
+                cellPadding: const pw.EdgeInsets.all(3),
+              ),
+            if (report == 'Payroll Summary') ...[
+              pw.SizedBox(height: 10),
+              pw.Text('Statutory payment reconciliation (employee + employer)',
+                  style: pw.TextStyle(
+                      fontSize: 9, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 4),
+              pw.TableHelper.fromTextArray(
+                  headers: const [
+                    'CONTRIBUTION',
+                    'ORIGINAL TOTAL RM',
+                    'LESS: MISSING NUMBER RM',
+                    'NET PAYABLE RM'
+                  ],
+                  data: [
+                    for (final item in const [
+                      ('EPF', 'epfEmployee', 'epfEmployer', 'excludedEpf'),
+                      (
+                        'SOCSO',
+                        'socsoEmployee',
+                        'socsoEmployer',
+                        'excludedSocso'
+                      ),
+                      ('EIS', 'eisEmployee', 'eisEmployer', 'excludedEis')
+                    ])
+                      (() {
+                        final branches =
+                            rows.where((row) => row['branch'] != 'GRAND TOTAL');
+                        final total = branches.fold<double>(
+                            0,
+                            (sum, row) =>
+                                sum +
+                                _number(row[item.$2]) +
+                                _number(row[item.$3]));
+                        final excluded = branches.fold<double>(
+                            0, (sum, row) => sum + _number(row[item.$4]));
+                        final employeeCount = branches.fold<int>(
+                            0,
+                            (sum, row) =>
+                                sum +
+                                _number(row[
+                                        '${item.$1.toLowerCase()}Employees'])
+                                    .toInt());
+                        final excludedCount = branches.fold<int>(
+                            0,
+                            (sum, row) =>
+                                sum +
+                                _number(row['${item.$4}Employees']).toInt());
+                        return [
+                          item.$1,
+                          statutoryAmountWithEmployees(total, employeeCount),
+                          statutoryAmountWithEmployees(excluded, excludedCount),
+                          statutoryAmountWithEmployees(
+                              total - excluded, employeeCount - excludedCount)
+                        ];
+                      })()
+                  ],
+                  headerStyle:
+                      pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
+                  cellStyle: const pw.TextStyle(fontSize: 7),
+                  cellPadding: const pw.EdgeInsets.all(4)),
+              pw.SizedBox(height: 8),
+              payrollSummaryZeroContributorLists(
+                statutoryZeroContributorList(rows, 'zeroEpfEmployees'),
+                statutoryZeroContributorList(rows, 'zeroSocsoEmployees'),
+              ),
+            ],
+            if (report == 'HRDF') ...[
+              pw.Spacer(),
+              pw.Align(
+                alignment: pw.Alignment.bottomRight,
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      'Prepared by Admin',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      DateFormat('dd/MM/yyyy hh:mm a').format(printedAt),
+                      style: const pw.TextStyle(fontSize: 8),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        );
+    final document = pw.Document();
+    document.addPage(pw.Page(
+      pageFormat: PdfPageFormat.a4.landscape,
+      margin: report == 'Payroll Summary'
+          ? const pw.EdgeInsets.all(payrollSummaryPdfMargin)
+          : const pw.EdgeInsets.all(18),
+      build: (_) => report == 'Payroll Summary'
+          ? fitPayrollSummaryToA4(buildContent())
+          : buildContent(),
+    ));
+    await Printing.layoutPdf(
+      name:
+          '${report.replaceAll(' ', '_')}_${DateFormat('yyyy_MM').format(month)}.pdf',
+      format: PdfPageFormat.a4.landscape,
+      onLayout: (_) => document.save(),
+    );
+  }
+
+  Future<bool> _exportRhbLayout(
+      {String? only, void Function(String, Uint8List)? onFile}) async {
+    try {
+      _message(
+        only == 'rhb'
+            ? 'Preparing RHB layout...'
+            : 'Preparing RHB, EPF, EIS and SOCSO layouts...',
+      );
+
+      final selectedMonth =
+          DateFormat('MMMM yyyy').format(selectedPayrollMonth);
+
+      final monthFile = DateFormat('yyyy_MM').format(selectedPayrollMonth);
+      final exportStamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+
+      // ============================================================
+      // LOAD PAYROLL
+      // ============================================================
+
+      final monthStart = DateTime(
+        selectedPayrollMonth.year,
+        selectedPayrollMonth.month,
+        1,
+      );
+      final nextMonth = DateTime(
+        selectedPayrollMonth.year,
+        selectedPayrollMonth.month + 1,
+        1,
+      );
+      final payrollRows = <Map<String, dynamic>>[];
+      const payrollPageSize = 1000;
+      for (var offset = 0;; offset += payrollPageSize) {
+        final response = await SupabaseService.database
+            .from('payroll')
+            .select()
+            .gte('period', DateFormat('yyyy-MM-dd').format(monthStart))
+            .lt('period', DateFormat('yyyy-MM-dd').format(nextMonth))
+            .order('employee_id')
+            .range(offset, offset + payrollPageSize - 1);
+        final page = List<Map<String, dynamic>>.from(response);
+        payrollRows.addAll(page);
+        if (page.length < payrollPageSize) break;
+      }
+
+      // Keep this defensive check for legacy period representations while the
+      // database query ensures historical rows cannot consume Supabase's row
+      // limit before the selected month is reached.
+      payrollRows.removeWhere(
+        (row) => !_payrollPeriodMatchesMonth(
+          row['period'],
+          selectedPayrollMonth,
+        ),
+      );
+      if (payrollRows.isEmpty) {
+        _message(
+          'No generated payroll found for $selectedMonth.',
+        );
+        return false;
+      }
+
+      // ============================================================
+      // LOAD EMPLOYEES
+      // ============================================================
+
+      final employeeIds = payrollRows
+          .map(
+            (row) => _normalizeBranchValue(
+              row['employee_id'],
+            ),
+          )
+          .where(
+            (id) => id.isNotEmpty,
+          )
+          .toSet()
+          .toList();
+
+      final employeeResponse =
+          await SupabaseService.database.from('employees').select().inFilter(
+                'employee_id',
+                employeeIds,
+              );
+
+      final employeeMap = <String, Map<String, dynamic>>{};
+
+      for (final employee in List<Map<String, dynamic>>.from(
+        employeeResponse,
+      )) {
+        final id = _normalizeBranchValue(
+          employee['employee_id'],
+        );
+
+        if (id.isNotEmpty) {
+          employeeMap[id] = employee;
+        }
+      }
+      payrollRows.removeWhere((row) {
+        final employee = employeeMap[_normalizeBranchValue(row['employee_id'])];
+        return employee == null ||
+            !PayrollMonthScope.activeInMonth(employee, selectedPayrollMonth);
+      });
+      if (payrollRows.isEmpty) {
+        _message('No eligible employee payroll for $selectedMonth.');
+        return false;
+      }
+      payrollRows.sort(
+        (a, b) => _comparePayrollExportRecords(a, b, employeeMap),
+      );
+
+      final salaryDefaultsResponse = await SupabaseService.database
+          .from('employee_salary_defaults')
+          .select()
+          .inFilter('employee_id', employeeIds);
+      final salaryDefaultsMap = <String, Map<String, dynamic>>{};
+      for (final salaryDefault in List<Map<String, dynamic>>.from(
+        salaryDefaultsResponse,
+      )) {
+        final id = _normalizeBranchValue(salaryDefault['employee_id']);
+        if (id.isNotEmpty) {
+          salaryDefaultsMap[id] = salaryDefault;
+        }
+      }
+
+      final branchResponse = await SupabaseService.getBranches();
+      final branchNameById = <String, String>{};
+      for (final branch in branchResponse) {
+        final branchId = _branchIdFromMap(branch);
+        if (branchId.isNotEmpty) {
+          branchNameById[branchId] = _branchNameFromMap(branch, branchId);
+        }
+      }
+
+      String rhbBranchKey({
+        required String branchId,
+        required bool isForeign,
+      }) {
+        final branchName = branchNameById[branchId] ?? branchId;
+        final compact = '$branchId $branchName'
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z0-9]'), '');
+        if (compact.contains('sungaipetani') ||
+            compact.contains('spedar') ||
+            compact.contains('hbsp') ||
+            compact.contains('edar')) {
+          return isForeign ? 'hq_foreign' : 'hq_local';
+        }
+        if (compact.contains('prai') || compact.contains('perai')) {
+          return 'prai';
+        }
+        if (compact.contains('kulim')) return 'kulim';
+        if (compact.contains('alorsetar')) return 'alor_setar';
+        if (compact.contains('jitra')) return 'jitra';
+        if (compact.contains('amanjaya') || compact.contains('hbamj')) {
+          return 'amanjaya';
+        }
+        if (compact.contains('astana')) return 'astana';
+        if (compact.contains('gurun')) return 'gurun';
+        if (compact.contains('langkawi') || compact.contains('lkw')) {
+          return 'langkawi';
+        }
+        final fallback = branchName
+            .toUpperCase()
+            .replaceAll(RegExp(r'[^A-Z0-9]+'), '-')
+            .replaceAll(RegExp(r'^-+|-+$'), '');
+        return 'other_${fallback.isEmpty ? 'UNASSIGNED' : fallback}';
+      }
+
+      String rhbFileName(String branchKey) {
+        final titleMonth = DateFormat('MMM yyyy').format(selectedPayrollMonth);
+        final upperMonth = titleMonth.toUpperCase();
+        final upperMonthHyphen =
+            DateFormat('MMM-yyyy').format(selectedPayrollMonth).toUpperCase();
+        return switch (branchKey) {
+          'hq_local' => 'HB-HQ-SALARY-LOCAL-$titleMonth.xlsx',
+          'hq_foreign' => 'HB-HQ-SAL-FOREIGNER-$titleMonth.xlsx',
+          'prai' => 'HB-CF-SAL-$upperMonth.xlsx',
+          'kulim' => 'HB-KULIM-SAL-$upperMonthHyphen.xlsx',
+          'alor_setar' => 'HB-AS-SAL- $upperMonth.xlsx',
+          'jitra' => 'HB-JITRA-SAL- $upperMonth.xlsx',
+          'amanjaya' => 'HB-AMJ-SAL-$upperMonth.xlsx',
+          'astana' => 'HB-ASTANA-SALARY -$upperMonth.xlsx',
+          'gurun' => 'HB-GURUN-SALARY-$upperMonth.xlsx',
+          'langkawi' => 'HB-LKW-SAL -$upperMonth.xlsx',
+          _ => 'HB-${branchKey.replaceFirst('other_', '')}-SAL-'
+              '$upperMonth.xlsx',
+        };
+      }
+
+      // ============================================================
+      // MONEY HELPER
+      // ============================================================
+
+      double money(dynamic value) {
+        if (value == null) {
+          return 0.0;
+        }
+
+        if (value is num) {
+          return value.toDouble();
+        }
+
+        final cleaned = value
+            .toString()
+            .replaceAll(',', '')
+            .replaceAll(
+              RegExp(r'RM', caseSensitive: false),
+              '',
+            )
+            .trim();
+
+        return double.tryParse(cleaned) ?? 0.0;
+      }
+
+      // ============================================================
+      // TEXT VALUE HELPER
+      // ============================================================
+
+      String value(
+        Map<String, dynamic> row,
+        List<String> keys,
+      ) {
+        for (final key in keys) {
+          final raw = row[key];
+
+          if (raw == null) {
+            continue;
+          }
+
+          final text = raw.toString().trim();
+
+          if (text.isNotEmpty) {
+            return text;
+          }
+        }
+
+        return '';
+      }
+
+      // Bank amounts come only from the selected saved payroll row.
+      // Never recalculate attendance, contributions or today's salary defaults.
+      double netSalary(Map<String, dynamic> row) =>
+          SavedPayrollAmounts.finalNetPay(row);
+
+      // ============================================================
+      // EXCEL ROW WRITER
+      // ============================================================
+
+      void writeRow(
+        xls.Sheet sheet,
+        int row,
+        List<dynamic> values, {
+        Set<int> textColumns = const <int>{},
+      }) {
+        for (var c = 0; c < values.length; c++) {
+          final cell = sheet.cell(
+            xls.CellIndex.indexByColumnRow(
+              columnIndex: c,
+              rowIndex: row,
+            ),
+          );
+
+          final item = values[c];
+
+          if (textColumns.contains(c)) {
+            cell.value = xls.TextCellValue(
+              item?.toString() ?? '',
+            );
+          } else if (item is num) {
+            cell.value = xls.DoubleCellValue(
+              item.toDouble(),
+            );
+          } else {
+            cell.value = xls.TextCellValue(
+              item?.toString() ?? '',
+            );
+          }
+        }
+      }
+
+      // ============================================================
+      // SAVE EXCEL
+      // ============================================================
+
+      final generatedFiles = <String, Uint8List>{};
+      void saveExcel(
+        String fileName,
+        String sheetName,
+        List<String> headers,
+        List<List<dynamic>> rows, {
+        Set<int> moneyColumns = const <int>{},
+        bool includeHeader = true,
+        double? rowHeight,
+        double? columnWidth,
+        String? fontFamily,
+        int? fontSize,
+      }) {
+        final excel = xls.Excel.createExcel();
+
+        final defaultSheet = excel.getDefaultSheet();
+
+        if (defaultSheet != null && defaultSheet != sheetName) {
+          excel.rename(
+            defaultSheet,
+            sheetName,
+          );
+        }
+
+        final sheet = excel[sheetName];
+        final textColumns = <int>{
+          for (var index = 0; index < headers.length; index++)
+            if (const {
+              'NEW_IC_NO',
+              'IC_NO',
+              'EPF_NO',
+              'BANK_ACCOUNT',
+            }.contains(headers[index].trim().toUpperCase()))
+              index,
+        };
+
+        if (columnWidth != null) {
+          for (var column = 0; column < headers.length; column++) {
+            sheet.setColumnWidth(column, columnWidth);
+          }
+        }
+
+        if (includeHeader) {
+          writeRow(
+            sheet,
+            0,
+            headers,
+          );
+          for (var column = 0; column < headers.length; column++) {
+            final headerCell = sheet.cell(
+              xls.CellIndex.indexByColumnRow(
+                columnIndex: column,
+                rowIndex: 0,
+              ),
+            );
+            headerCell.cellStyle = _excelHeaderStyle(headerCell.cellStyle);
+          }
+        }
+
+        final firstDataRow = includeHeader ? 1 : 0;
+        for (var r = 0; r < rows.length; r++) {
+          final rowIndex = firstDataRow + r;
+          writeRow(
+            sheet,
+            rowIndex,
+            rows[r],
+            textColumns: textColumns,
+          );
+          if (rowHeight != null) {
+            sheet.setRowHeight(rowIndex, rowHeight);
+          }
+          if (fontFamily != null || fontSize != null) {
+            for (var column = 0; column < headers.length; column++) {
+              final cell = sheet.cell(
+                xls.CellIndex.indexByColumnRow(
+                  columnIndex: column,
+                  rowIndex: rowIndex,
+                ),
+              );
+              cell.cellStyle = (cell.cellStyle ?? xls.CellStyle()).copyWith(
+                fontFamilyVal: fontFamily,
+                fontSizeVal: fontSize,
+              );
+            }
+          }
+          for (final column in moneyColumns) {
+            final moneyCell = sheet.cell(
+              xls.CellIndex.indexByColumnRow(
+                columnIndex: column,
+                rowIndex: rowIndex,
+              ),
+            );
+            moneyCell.cellStyle =
+                (moneyCell.cellStyle ?? xls.CellStyle()).copyWith(
+              numberFormat: xls.NumFormat.custom(formatCode: '#,##0.00'),
+            );
+          }
+        }
+
+        final bytes = excel.encode();
+
+        if (bytes == null || bytes.isEmpty) {
+          throw Exception(
+            '$fileName could not be generated.',
+          );
+        }
+        generatedFiles[fileName] = Uint8List.fromList(bytes);
+      }
+
+      // ============================================================
+      // OUTPUT ROWS
+      // ============================================================
+
+      final rhb = <List<dynamic>>[];
+      final rhbByBranch = <String, List<List<dynamic>>>{};
+
+      final epfLocal = <List<dynamic>>[];
+
+      final epfForeign = <List<dynamic>>[];
+
+      final eisLocal = <List<dynamic>>[];
+
+      final eisForeign = <List<dynamic>>[];
+
+      final socsoLocal = <List<dynamic>>[];
+
+      final socsoForeign = <List<dynamic>>[];
+
+      // ============================================================
+      // BUILD EXPORT DATA
+      // ============================================================
+
+      final bankEmployeeIds = <String>{};
+      for (final payroll in payrollRows) {
+        final id = _normalizeBranchValue(
+          payroll['employee_id'],
+        );
+
+        if (!bankEmployeeIds.add(id)) {
+          throw StateError(
+              'Duplicate saved payroll for $id in $selectedMonth. Review payroll before exporting.');
+        }
+
+        final employee = employeeMap[id] ?? <String, dynamic>{};
+        final salaryDefault = salaryDefaultsMap[id] ?? <String, dynamic>{};
+
+        // ----------------------------------------------------------
+        // EMPLOYEE NAME
+        // ----------------------------------------------------------
+
+        final employeeName = value(
+          employee,
+          const [
+            'name',
+            'employee_name',
+          ],
+        );
+
+        final payrollName = value(
+          payroll,
+          const [
+            'name',
+            'employee_name',
+          ],
+        );
+
+        final name = employeeName.isNotEmpty ? employeeName : payrollName;
+
+        // ----------------------------------------------------------
+        // IC
+        // ----------------------------------------------------------
+
+        final employeeIc = value(
+          employee,
+          const [
+            'new_ic_no',
+            'newIcNo',
+          ],
+        );
+
+        final payrollIc = value(
+          payroll,
+          const [
+            'new_ic_no',
+            'newIcNo',
+          ],
+        );
+
+        final ic = employeeIc.isNotEmpty ? employeeIc : payrollIc;
+
+        // Prefer the salary-default address, with employee address as a schema
+        // fallback. A value containing FRN uses SOCSO number; empty/non-FRN
+        // uses IC number.
+        final salaryDefaultAddress = value(
+          salaryDefault,
+          const ['address', 'Address', 'ADDRESS'],
+        );
+        final employeeAddress = value(
+          employee,
+          const ['address', 'Address', 'ADDRESS'],
+        );
+        final address = salaryDefaultAddress.isNotEmpty
+            ? salaryDefaultAddress
+            : employeeAddress;
+        final socsoNo = value(
+          employee,
+          const [
+            'socso_no',
+            'socsoNo',
+            'socso_number',
+            'SOCSO_NO',
+          ],
+        );
+        final icDigits = ic.replaceAll(RegExp(r'[^0-9]'), '');
+        final icDigitCount = icDigits.length;
+        final isForeign = address.trim().toUpperCase().contains('FRN');
+        final firstName = value(
+          employee,
+          const ['first_name', 'firstName'],
+        );
+        final lastName = value(
+          employee,
+          const ['last_name', 'lastName'],
+        );
+        final statutoryName =
+            isForeign && firstName.isNotEmpty && lastName.isNotEmpty
+                ? '$lastName $firstName'
+                : name;
+        final isDigitsOnly = RegExp(r'^\d+$').hasMatch(ic);
+        final exportIc = !isForeign && isDigitsOnly && ic.length < 12
+            ? ic.padLeft(12, '0')
+            : (icDigitCount == 12 ? icDigits : ic.replaceAll('-', ''));
+        final localIcIdentifier =
+            !isForeign && icDigitCount == 12 ? exportIc : '';
+        final socsoIdentifier = socsoNo.isNotEmpty
+            ? socsoNo.replaceAll('-', '')
+            : localIcIdentifier;
+
+        // ----------------------------------------------------------
+        // BANK ACCOUNT
+        // ----------------------------------------------------------
+
+        final employeeBank = value(
+          employee,
+          const [
+            'bank_account',
+            'bankAccount',
+          ],
+        );
+
+        final payrollBank = value(
+          payroll,
+          const [
+            'bank_account',
+            'bankAccount',
+          ],
+        );
+
+        final bankAccount =
+            employeeBank.isNotEmpty ? employeeBank : payrollBank;
+
+        // ----------------------------------------------------------
+        // EPF NUMBER
+        // ----------------------------------------------------------
+
+        final employeeEpfNo = value(
+          employee,
+          const [
+            'epf_no',
+            'epfNo',
+            'kwsp_no',
+            'kwspNo',
+          ],
+        );
+
+        final payrollEpfNo = value(
+          payroll,
+          const [
+            'epf_no',
+            'epfNo',
+            'kwsp_no',
+            'kwspNo',
+          ],
+        );
+
+        final epfNo = employeeEpfNo.isNotEmpty ? employeeEpfNo : payrollEpfNo;
+        final epfIdentifier = epfNo.isNotEmpty ? epfNo : localIcIdentifier;
+
+        // ----------------------------------------------------------
+        // CALCULATE AMOUNTS
+        // ----------------------------------------------------------
+
+        final net = netSalary(payroll);
+
+        final epfEmployee = money(
+          payroll['epf_employee'] ?? payroll['epfEmployee'],
+        );
+
+        final epfEmployer = money(
+          payroll['epf_employer'] ?? payroll['epfEmployer'],
+        );
+
+        final eisEmployee = money(
+          payroll['eis_employee'] ?? payroll['eisEmployee'],
+        );
+
+        final eisEmployer = money(
+          payroll['eis_employer'] ?? payroll['eisEmployer'],
+        );
+
+        final socsoEmployee = money(
+          payroll['socso_employee'] ?? payroll['socsoEmployee'],
+        );
+
+        final socsoEmployer = money(
+          payroll['socso_employer'] ?? payroll['socsoEmployer'],
+        );
+
+        // ----------------------------------------------------------
+        // TOTAL STATUTORY AMOUNTS
+        // ----------------------------------------------------------
+
+        final eisTotal = eisEmployee + eisEmployer;
+
+        final socsoTotal = socsoEmployee + socsoEmployer;
+
+        // ----------------------------------------------------------
+        // RHB
+        //
+        // JUMLAH = NET SALARY
+        // ----------------------------------------------------------
+
+        final transferMethod = SalaryTransfer.resolve(
+          employee['salary_transfer_method'],
+          employee.isNotEmpty ? employeeBank : bankAccount,
+        );
+        if (bankAccount.isNotEmpty && transferMethod == 'rhb') {
+          final rhbIc = icDigitCount < 12 ? '' : exportIc;
+          final rhbShortIc =
+              icDigitCount < 12 ? ic.replaceAll('-', '').trim() : '';
+          final rhbRow = <dynamic>[
+            name,
+            rhbIc,
+            bankAccount,
+            net,
+            '',
+            rhbShortIc,
+            'Salary $selectedMonth',
+          ];
+          rhb.add(rhbRow);
+          final payrollBranchId = employee.isNotEmpty
+              ? _payrollBranchIdFromEmployee(employee)
+              : _normalizeBranchValue(
+                  payroll['payroll_branch_id'] ?? payroll['branch_id'],
+                );
+          final branchKey = rhbBranchKey(
+            branchId: payrollBranchId,
+            isForeign: isForeign,
+          );
+          rhbByBranch
+              .putIfAbsent(branchKey, () => <List<dynamic>>[])
+              .add(rhbRow);
+        }
+
+        // ----------------------------------------------------------
+        // EPF
+        //
+        // SALARY = BASIC SALARY - UNPAID DEDUCTION
+        // ----------------------------------------------------------
+
+        final eligibleForEpfExport =
+            epfEmployee + epfEmployer > 0 && epfIdentifier.isNotEmpty;
+        if (eligibleForEpfExport) {
+          final epfRow = <dynamic>[
+            statutoryName,
+            '',
+            '',
+            exportIc,
+            epfIdentifier,
+            epfEmployee,
+            epfEmployer,
+            '',
+            _epfReportSalary(payroll),
+          ];
+          if (isForeign) {
+            epfForeign.add(epfRow);
+          } else {
+            epfLocal.add(epfRow);
+          }
+        }
+
+        // ----------------------------------------------------------
+        // EIS
+        // ----------------------------------------------------------
+
+        if (eisTotal > 0) {
+          final eisRow = <dynamic>[
+            name,
+            exportIc,
+            '',
+            eisTotal,
+          ];
+          if (isForeign) {
+            eisForeign.add(eisRow);
+          } else {
+            eisLocal.add(eisRow);
+          }
+        }
+
+        // ----------------------------------------------------------
+        // SOCSO
+        // ----------------------------------------------------------
+
+        final eligibleForSocsoExport =
+            socsoTotal > 0 && socsoIdentifier.isNotEmpty;
+        if (eligibleForSocsoExport) {
+          final socsoRow = <dynamic>[
+            statutoryName,
+            socsoIdentifier,
+            '',
+            socsoTotal,
+          ];
+          if (isForeign) {
+            socsoForeign.add(socsoRow);
+          } else {
+            socsoLocal.add(socsoRow);
+          }
+        }
+      }
+
+      // ============================================================
+      // CREATE RHB EXCEL
+      // ============================================================
+
+      if (only == null || only == 'rhb') {
+        final rhbExports = only == null
+            ? <String, List<List<dynamic>>>{'ALL_BRANCHES': rhb}
+            : rhbByBranch;
+        for (final branchExport in rhbExports.entries) {
+          saveExcel(
+            only == null
+                ? 'RHB_${monthFile}_$exportStamp.xlsx'
+                : rhbFileName(branchExport.key),
+            'SALARY',
+            const [
+              'NAME',
+              'NEW_IC_NO',
+              'BANK_ACCOUNT',
+              'JUMLAH',
+              '',
+              '',
+              'SELECTED PAYROLL MONTH',
+            ],
+            branchExport.value,
+            moneyColumns: const {3},
+            includeHeader: false,
+            rowHeight: 15,
+            columnWidth: 19.57,
+            fontFamily: 'Calibri',
+            fontSize: 11,
+          );
+        }
+      }
+
+      // ============================================================
+      // CREATE EPF EXCEL
+      // ============================================================
+
+      if (only == null || only == 'epf') {
+        saveExcel(
+          'EPF_${monthFile}_$exportStamp.xlsx',
+          'EPF',
+          const [
+            'NAME',
+            '',
+            '',
+            'IC_NO',
+            'EPF_NO',
+            'EMPLOYEE EPF AMOUNT',
+            'EMPLOYER EPF AMOUNT',
+            '',
+            'TOTAL AMOUNT',
+          ],
+          [
+            ...epfLocal,
+            ...epfForeign,
+          ],
+          includeHeader: false,
+        );
+      }
+
+      // ============================================================
+      // CREATE EIS EXCEL
+      // ============================================================
+
+      if (only == null || only == 'eis') {
+        saveExcel(
+          'EIS_${monthFile}_$exportStamp.xlsx',
+          'EIS',
+          const [
+            'NAME',
+            'IC_NO',
+            '',
+            'EIS TOTAL AMOUNT',
+          ],
+          [
+            ...eisLocal,
+            ...eisForeign,
+          ],
+          includeHeader: false,
+        );
+      }
+
+      // ============================================================
+      // CREATE SOCSO EXCEL
+      // ============================================================
+
+      if (only == null || only == 'socso') {
+        saveExcel(
+          'SOCSO_${monthFile}_$exportStamp.xlsx',
+          'SOCSO',
+          const [
+            'NAME',
+            'IC_NO',
+            '',
+            'SOCSO TOTAL AMOUNT',
+          ],
+          [
+            ...socsoLocal,
+            ...socsoForeign,
+          ],
+          includeHeader: false,
+        );
+      }
+
+      // ============================================================
+      // SUCCESS
+      // ============================================================
+
+      if (only == null && generatedFiles.length != 4) {
+        throw StateError('Expected four payroll workbooks.');
+      }
+      if (generatedFiles.isEmpty) {
+        _message('No eligible files to export for $selectedMonth.');
+        return false;
+      }
+      for (final file in generatedFiles.entries) {
+        if (onFile != null) {
+          onFile(file.key, file.value);
+        } else {
+          await FileSaver.instance.saveFile(
+              name: file.key.replaceFirst(RegExp(r'\.xlsx$'), ''),
+              bytes: file.value,
+              ext: 'xlsx',
+              mimeType: MimeType.microsoftExcel);
+        }
+      }
+      if (onFile != null) return true;
+
+      _message(only == null
+          ? 'Downloaded 4 separate Excel files for $selectedMonth: '
+              'RHB Layout, EPF, EIS and SOCSO (export $exportStamp). '
+              'EPF: ${epfLocal.length} local, ${epfForeign.length} foreign. '
+              'EIS: ${eisLocal.length} local, ${eisForeign.length} foreign. '
+              'SOCSO exported ${socsoLocal.length} local and '
+              '${socsoForeign.length} foreign employee(s).'
+          : only == 'rhb'
+              ? '${rhbByBranch.length} branch-wise RHB Excel file(s) exported '
+                  'for $selectedMonth with ${rhb.length} employee(s).'
+              : '${only.toUpperCase()} Excel exported for $selectedMonth.');
+      return true;
+    } catch (e) {
+      _message(
+        'RHB / statutory Excel export failed: $e',
+      );
+      return false;
+    }
+  }
+
+  Widget _rhbLayoutPage() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.account_balance, size: 56),
+          const SizedBox(height: 12),
+          const Text(
+            'RHB Layout',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Salary month: ${DateFormat('MMMM yyyy').format(selectedPayrollMonth)}',
+          ),
+        ],
+      ),
+    );
+  }
+
+// ============================================================================
+// PAYROLL PERIOD MATCHER
+// ============================================================================
+
+  bool _payrollPeriodMatchesMonth(dynamic value, DateTime month) =>
+      PayrollMonthScope.matchesMonth(value, month);
+
+// ============================================================================
+// PAYROLL PERIOD FORMATTER
+// ============================================================================
+
+  String _formatPayrollPeriod(
+    dynamic value,
+  ) {
+    if (value == null) {
+      return '-';
+    }
+
+    final text = value.toString();
+
+    if (text.isEmpty) {
+      return '-';
+    }
+
+    final parsed = DateTime.tryParse(text);
+
+    if (parsed == null) {
+      return text;
+    }
+
+    return DateFormat(
+      'MMM yyyy',
+    ).format(parsed);
+  }
+
+// ============================================================================
+// PAYROLL NUMBER
+// ============================================================================
+
+  double _payrollNumber(
+    dynamic value,
+  ) {
+    if (value == null) {
+      return 0;
+    }
+
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    final text = value
+        .toString()
+        .replaceAll(',', '')
+        .replaceAll('RM', '')
+        .replaceAll('rm', '')
+        .trim();
+
+    return double.tryParse(text) ?? 0;
+  }
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+  Widget _responsiveFormGrid({
+    required List<Widget> children,
+    double minimumFieldWidth = 250,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 12.0;
+        final availableWidth = constraints.maxWidth;
+        final columns =
+            ((availableWidth + spacing) / (minimumFieldWidth + spacing))
+                .floor()
+                .clamp(1, 5)
+                .toInt();
+        final fieldWidth =
+            (availableWidth - (spacing * (columns - 1))) / columns;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: children
+              .map((child) => SizedBox(width: fieldWidth, child: child))
+              .toList(),
+        );
+      },
+    );
+  }
+
+  Widget _dialogField(
+    TextEditingController controller,
+    String label, {
+    TextInputType? keyboardType,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(
+        bottom: 10,
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
+  }
+
+  Widget _detail(
+    String title,
+    String value,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        vertical: 5,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: Colors.black54,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.isEmpty ? '-' : value,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Border _hasaniOuterBorder([double width = 2]) => Border(
+        top: BorderSide(color: const Color(0xFF1B2234), width: width),
+        left: BorderSide(color: const Color(0xFF1B2234), width: width),
+        right: BorderSide(color: const Color(0xFFD6B24F), width: width),
+        bottom: BorderSide(color: const Color(0xFFD6B24F), width: width),
+      );
+
+  Widget _panel(
+    String title,
+    Widget child,
+  ) {
+    final isDashboard = selectedPage == 0;
+    final isEmployeeList = title.startsWith('Employee List') ||
+        title.toLowerCase().contains(' employees');
+    final neutralSurface = isDashboard || isEmployeeList;
+    final panelStyle = isEmployeeList
+        ? const (Icons.groups_rounded, Color(0xFFD6B24F))
+        : switch (title) {
+            'Payroll Management' => const (
+                Icons.account_balance_wallet_rounded,
+                Color(0xFFD6B24F)
+              ),
+            'Payroll Report' => const (
+                Icons.analytics_rounded,
+                Color(0xFF7C3AED)
+              ),
+            'Settings' => const (Icons.settings_rounded, Color(0xFFD6B24F)),
+            'Quick actions' => const (Icons.bolt_rounded, Color(0xFFD6B24F)),
+            'System status' => const (
+                Icons.monitor_heart_rounded,
+                Color(0xFF8B7740)
+              ),
+            'Employee List' => const (Icons.groups_rounded, Color(0xFFD6B24F)),
+            _ => const (Icons.dashboard_customize_rounded, Color(0xFF1B2234)),
+          };
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(isDashboard ? 16 : 20),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: isDashboard ? .82 : 1),
+        borderRadius: BorderRadius.circular(14),
+        border: neutralSurface
+            ? Border.all(color: const Color(0xFFE2E5EB))
+            : _hasaniOuterBorder(2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: neutralSurface ? 36 : 42,
+                height: neutralSurface ? 36 : 42,
+                decoration: BoxDecoration(
+                  color: panelStyle.$2.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(panelStyle.$1,
+                    color: panelStyle.$2, size: neutralSurface ? 20 : 23),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: neutralSurface ? 14 : 18),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _statCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color, [
+    VoidCallback? onTap,
+  ]) {
+    final isDashboard = selectedPage == 0;
+    return SizedBox(
+      width: 220,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(
+          14,
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: isDashboard ? .96 : 1),
+            borderRadius: BorderRadius.circular(
+              isDashboard ? 18 : 14,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x08000000),
+                blurRadius: 10,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withValues(
+                    alpha: 0.1,
+                  ),
+                  borderRadius: BorderRadius.circular(
+                    12,
+                  ),
+                ),
+                child: Icon(
+                  icon,
+                  color: color,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(
+                height: 18,
+              ),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black54,
+                ),
+              ),
+              const SizedBox(
+                height: 6,
+              ),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _actionButton(
+    String title,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
+    final palette = switch (title) {
+      'Employees' => const (Color(0xFF289BFF), Color(0xFF0754D8)),
+      'Payroll' => const (Color(0xFF35D879), Color(0xFF08A84F)),
+      'Edit Payroll' => const (Color(0xFFFFB52D), Color(0xFFF07A00)),
+      'Attendance' => const (Color(0xFFFFB52D), Color(0xFFF07A00)),
+      'Import CSV' => const (Color(0xFF2DD4D7), Color(0xFF0698AD)),
+      'Reports' => const (Color(0xFF9A55FF), Color(0xFF6425E5)),
+      'OPT. STAT' => const (Color(0xFF5B8DEF), Color(0xFF315DB5)),
+      _ => const (Color(0xFFFF5570), Color(0xFFE51D43)),
+    };
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(11),
+      child: Container(
+        width: 140,
+        height: 92,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FB),
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(color: const Color(0xFFE2E5EB)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: palette.$1.withValues(alpha: .13),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: palette.$2, size: 21),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF343B49),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _reportRow(
+    String title,
+    String value,
+  ) {
+    final icon = switch (title) {
+      'Employees' || 'Active Employees' => Icons.groups_rounded,
+      'Payroll Records' => Icons.receipt_long_rounded,
+      'Attendance Records' => Icons.event_available_rounded,
+      'Departments' => Icons.business_center_rounded,
+      'Branches' => Icons.store_rounded,
+      'Vacation Employees' => Icons.flight_rounded,
+      'New Joiners' => Icons.person_add_alt_1_rounded,
+      'Gross Payroll' || 'Net Payroll' => Icons.payments_rounded,
+      'Total Deductions' => Icons.remove_circle_rounded,
+      _ => Icons.analytics_rounded,
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        vertical: 6,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.only(right: 10),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF289BFF), Color(0xFF0754D8)],
+              ),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, color: Colors.white, size: 17),
+          ),
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                color: Colors.black54,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _money(
+    double value,
+  ) {
+    return 'RM ${NumberFormat('#,##0.00').format(value)}';
+  }
+
+  void _message(
+    String message,
+  ) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
+
+class _PowerEmptyIcon extends StatelessWidget {
+  const _PowerEmptyIcon(this.icon, this.color);
+
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 72,
+        height: 72,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [
+            color.withValues(alpha: .95),
+            Color.lerp(color, Colors.black, .18)!,
+          ]),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: .25),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Icon(icon, color: Colors.white, size: 38),
+      );
+}
+
+class _AdminDigitalClock extends StatefulWidget {
+  const _AdminDigitalClock();
+
+  @override
+  State<_AdminDigitalClock> createState() => _AdminDigitalClockState();
+}
+
+class _AdminDigitalClockState extends State<_AdminDigitalClock> {
+  late DateTime _now;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _now = DateTime.now();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 61,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .86),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withValues(alpha: .10)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.schedule_outlined,
+            size: 18,
+            color: Color(0xFFD6B24F),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                DateFormat('hh:mm:ss a').format(_now),
+                style: const TextStyle(
+                  color: Color(0xFF20242D),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .3,
+                ),
+              ),
+              Text(
+                DateFormat('dd MMM yyyy').format(_now),
+                style: const TextStyle(
+                  color: Color(0xFF667085),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
