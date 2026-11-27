@@ -10041,16 +10041,6 @@ class _AdminDashboardState extends State<AdminDashboard>
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
-                FilledButton.icon(
-                  icon: const Icon(Icons.schedule),
-                  label: const Text('Late Report'),
-                  onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                          builder: (_) => LateReportPage(
-                              month: selectedAttendanceMonth,
-                              branches: branches))),
-                ),
-                const SizedBox(height: 8),
                 const Text(
                   'Select a branch to view submitted employee attendance. Admin can edit submitted attendance.',
                   style: TextStyle(color: Colors.black54),
@@ -16251,16 +16241,6 @@ class _AdminDashboardState extends State<AdminDashboard>
                     ]),
                     _payrollActionMenu(
                         'Increments', Icons.trending_up_outlined, [
-                      MenuItemButton(
-                        onPressed: () => _showPayrollIncrementListDialog(
-                          month: selectedPayrollMonth,
-                          increments: monthlyIncrements,
-                        ),
-                        leadingIcon: const Icon(Icons.trending_up_outlined),
-                        child: Text(
-                          'Increment List (${monthlyIncrements.length})',
-                        ),
-                      ),
                       MenuItemButton(
                         onPressed: monthlyIncrements.isEmpty
                             ? null

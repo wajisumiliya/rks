@@ -1217,8 +1217,6 @@ class ModernAdminOverview extends StatelessWidget {
                           ),
                           const SizedBox(height: 18),
                           payroll(),
-                          const SizedBox(height: 18),
-                          late(m),
                         ],
                       ),
                       Column(
