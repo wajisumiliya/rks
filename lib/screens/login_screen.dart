@@ -61,7 +61,6 @@ class _LoginScreenState extends State<LoginScreen>
   late final AnimationController _rainController;
   late final Animation<double> _heroEntrance;
   late final Animation<double> _formEntrance;
-  bool _loginImagesPrecached = false;
 
   @override
   void initState() {
@@ -142,18 +141,6 @@ class _LoginScreenState extends State<LoginScreen>
     _idleStartTimer?.cancel();
     _idleBlinkTimer?.cancel();
     _idleCatAwake = false;
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_loginImagesPrecached) return;
-    _loginImagesPrecached = true;
-    precacheImage(AssetImage(_habitatScene.asset), context);
-    precacheImage(
-      AssetImage(LoginHabitatScene(_habitatScene.weekday, 'evening').asset),
-      context,
-    );
   }
 
   Future<void> _restoreSession() async {
@@ -795,19 +782,12 @@ class _LoginScreenState extends State<LoginScreen>
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset(
-              scene.asset,
-              alignment: Alignment.bottomLeft,
-              gaplessPlayback: true,
-              fit: BoxFit.cover,
-              filterQuality: FilterQuality.high,
-              errorBuilder: (_, __, ___) => DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: theme.pageGradient,
-                  ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: theme.pageGradient,
                 ),
               ),
             ),
