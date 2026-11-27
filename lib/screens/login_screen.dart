@@ -635,27 +635,18 @@ class _LoginScreenState extends State<LoginScreen> {
         fit: StackFit.expand,
         children: [
           Image.asset(
-            'assets/login_office_background.png',
+            'assets/payroll_login_background.jpg',
             fit: BoxFit.cover,
             alignment: Alignment.centerRight,
             excludeFromSemantics: true,
           ),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xA8112037), Color(0x40112037)],
-              ),
-            ),
-          ),
-          const Positioned.fill(child: _PayrollBackdrop()),
           SafeArea(
-        child: Center(
+        child: Align(
+          alignment: wide ? const Alignment(.72, 0) : Alignment.center,
           child: SingleChildScrollView(
             padding: EdgeInsets.all(wide ? 40 : 20),
             child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: wide ? 920 : 460),
+              constraints: BoxConstraints(maxWidth: 460),
               child: Material(
                 color: Colors.white,
                 elevation: 3,
@@ -664,43 +655,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 clipBehavior: Clip.antiAlias,
                 child: Row(
                   children: [
-                    if (wide)
-                      Expanded(
-                        child: Container(
-                          constraints: const BoxConstraints(minHeight: 535),
-                          padding: const EdgeInsets.all(44),
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [navy, Color(0xFF225079)],
-                            ),
-                          ),
-                          child: const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(Icons.account_balance_wallet_outlined,
-                                  size: 44, color: Color(0xFF9DC2FF)),
-                              SizedBox(height: 88),
-                              Text('Company Payroll',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 38,
-                                    fontWeight: FontWeight.w700,
-                                    height: 1.1,
-                                  )),
-                              SizedBox(height: 16),
-                              Text(
-                                'Access payroll, attendance and employee records from one place.',
-                                style: TextStyle(
-                                    fontSize: 16,
-                                    height: 1.5,
-                                    color: Color(0xFFD3E0F3)),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
                     Expanded(
                       child: Padding(
                         padding: EdgeInsets.all(wide ? 46 : 24),
@@ -808,59 +762,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _PayrollBackdrop extends StatelessWidget {
-  const _PayrollBackdrop();
-
-  @override
-  Widget build(BuildContext context) {
-    return const IgnorePointer(
-      child: ExcludeSemantics(
-        child: Stack(
-          children: [
-            Align(
-              alignment: Alignment(-.88, -.67),
-              child: _FinanceMotif(icon: Icons.receipt_long_outlined, size: 88),
-            ),
-            Align(
-              alignment: Alignment(.88, -.74),
-              child: _FinanceMotif(icon: Icons.calculate_outlined, size: 78),
-            ),
-            Align(
-              alignment: Alignment(-.88, .72),
-              child: _FinanceMotif(icon: Icons.account_balance_wallet_outlined, size: 78),
-            ),
-            Align(
-              alignment: Alignment(.88, .68),
-              child: _FinanceMotif(icon: Icons.bar_chart_rounded, size: 90),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FinanceMotif extends StatelessWidget {
-  const _FinanceMotif({required this.icon, required this.size});
-
-  final IconData icon;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size + 28,
-      height: size + 28,
-      decoration: BoxDecoration(
-        color: const Color(0x202B4D78),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0x66D4E7FF)),
-      ),
-      child: Icon(icon, size: size * .72, color: const Color(0xBBD7E9FF)),
     );
   }
 }
