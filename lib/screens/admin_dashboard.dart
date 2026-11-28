@@ -906,8 +906,19 @@ class _AdminDashboardState extends State<AdminDashboard>
     );
   }
 
-  Widget _portalPage(Widget child) => ColoredBox(
-        color: adminCanvas,
+  Widget _portalPage(Widget child) => DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFF7F2E8),
+              Color(0xFFF8F9FC),
+              Color(0xFFE7EEF8),
+            ],
+            stops: [0, .48, 1],
+          ),
+        ),
         child: AdminReportsMenu.pages.contains(selectedPage)
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
