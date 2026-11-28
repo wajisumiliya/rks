@@ -5047,32 +5047,6 @@ class _AdminDashboardState extends State<AdminDashboard>
                 ),
               ),
               const SizedBox(height: 16),
-              _responsiveBranchButtonRow(
-                buttons: [
-                  _employeeBranchFilterButton(
-                    directoryStyle: true,
-                    label: 'All branches',
-                    selected: _adminEmployeeBranchFilter == null,
-                    onTap: () => setState(() {
-                      _adminEmployeeBranchFilter = null;
-                      _adminEmployeePage = 0;
-                    }),
-                  ),
-                  for (final branch in branchNames)
-                    _employeeBranchFilterButton(
-                      directoryStyle: true,
-                      label: branch,
-                      selected: _adminEmployeeBranchFilter == branch,
-                      onTap: () => setState(
-                        () {
-                          _adminEmployeeBranchFilter = branch;
-                          _adminEmployeePage = 0;
-                        },
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
               Row(children: [
                 Expanded(
                     child: Text(
@@ -10036,6 +10010,11 @@ class _AdminDashboardState extends State<AdminDashboard>
         }
 
         final branches = snapshot.data ?? [];
+        if (branches.length == 1) {
+          final branch = branches.single;
+          final id = (branch['id'] ?? branch['branch_id'] ?? '').toString();
+          if (id.isNotEmpty) return _branchAttendanceEmployeesPage(id);
+        }
         return RefreshIndicator(
           onRefresh: () async => setState(() {
             _attendanceBranchesFuture = null;
@@ -11996,45 +11975,17 @@ class _AdminDashboardState extends State<AdminDashboard>
 
   Future<void> _showGenerateAttendancePayrollDialog() async {
     try {
-      final data = await Future.wait<dynamic>([
-        service.loadNeonBranches(),
-        SupabaseService.database
-            .from('employees')
-            .select()
-            .eq('is_active', true),
-      ]);
+      final records = await SupabaseService.database.from('employees').select();
       if (!mounted) return;
-      final branches = List<Map<String, dynamic>>.from(data[0]);
-      final employees = List<Map<String, dynamic>>.from(data[1])
-          .where((e) => _employmentStatus(e) == 'active')
-          .toList();
-      final names = <String, String>{
-        for (final branch in branches)
-          _branchIdFromMap(branch):
-              _branchNameFromMap(branch, _branchIdFromMap(branch))
-      };
-      final counts = <String, int>{};
-      for (final employee in employees) {
-        final id = _payrollBranchIdFromEmployee(employee);
-        if (id.isEmpty) continue;
-        names.putIfAbsent(id, () => id);
-        counts[id] = (counts[id] ?? 0) + 1;
-      }
-      final choice = await showDialog<PayrollGenerationChoice>(
-          context: context,
-          builder: (_) => PayrollGenerationDialog(
-              initialMonth: selectedPayrollMonth,
-              branches: names,
-              employeeCounts: counts));
-      if (choice == null || !mounted) return;
-      final selected = employees
-          .where(
-              (e) => choice.branchIds.contains(_payrollBranchIdFromEmployee(e)))
+      final employees = List<Map<String, dynamic>>.from(records)
+          .where((employee) =>
+              PayrollMonthScope.activeInMonth(employee, selectedPayrollMonth))
           .toList();
       await _showPayrollEmployeeSelection(
-          branchName: '${choice.branchIds.length} selected branches',
-          employees: selected,
-          month: choice.month);
+        branchName: 'RK Success Sdn Bhd',
+        employees: employees,
+        month: selectedPayrollMonth,
+      );
     } catch (error) {
       if (mounted) _message('Unable to prepare payroll generation: $error');
     }
@@ -16180,7 +16131,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Select a branch, select employees, then generate payroll for the selected month.',
+                  'Select the payroll month, then choose employees to generate payroll.',
                   style: TextStyle(
                     fontSize: 15,
                     color: Colors.black54,
@@ -16232,7 +16183,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                                 )
                             : null,
                         leadingIcon: const Icon(Icons.picture_as_pdf_outlined),
-                        child: const Text('Save All Branches PDF'),
+                        child: const Text('Save Payroll PDF'),
                       ),
                       MenuItemButton(
                         onPressed: selectedPayrollBranchId == null &&
@@ -16243,80 +16194,10 @@ class _AdminDashboardState extends State<AdminDashboard>
                                 )
                             : null,
                         leadingIcon: const Icon(Icons.table_view_outlined),
-                        child: const Text('Export All Branches Excel'),
+                        child: const Text('Export Payroll Excel'),
                       ),
                     ]),
                   ],
-                ),
-                const SizedBox(height: 26),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E5EB)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Branch',
-                          style: TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 360),
-                            child: DropdownButtonFormField<String>(
-                              key: ValueKey(selectedPayrollBranchId),
-                              initialValue:
-                                  branchIds.contains(selectedPayrollBranchId)
-                                      ? selectedPayrollBranchId
-                                      : '',
-                              isExpanded: true,
-                              decoration: const InputDecoration(
-                                labelText: 'Filter payroll by branch',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: [
-                                const DropdownMenuItem(
-                                    value: '', child: Text('All branches')),
-                                ...branchIds.map((id) => DropdownMenuItem(
-                                    value: id,
-                                    child: Text(branchNames[id] ?? id))),
-                              ],
-                              onChanged: (value) => setState(() =>
-                                  selectedPayrollBranchId =
-                                      value == '' ? null : value),
-                            ),
-                          ),
-                          OutlinedButton.icon(
-                            onPressed: selectedPayrollBranchId == null
-                                ? null
-                                : () async {
-                                    final id = selectedPayrollBranchId!;
-                                    await _showPayrollEmployeeSelection(
-                                      branchName: branchNames[id] ?? id,
-                                      employees: branchGroups[id] ?? [],
-                                      month: selectedPayrollMonth,
-                                    );
-                                    if (mounted) setState(() {});
-                                  },
-                            icon: const Icon(Icons.group_add_outlined),
-                            label: const Text('Select Employees'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                          'Choose a branch to filter payroll or select employees for generation.',
-                          style: TextStyle(color: Colors.black54)),
-                    ],
-                  ),
                 ),
                 const SizedBox(height: 24),
                 LayoutBuilder(
@@ -16344,7 +16225,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                         SizedBox(
                           width: cardWidth,
                           child: _payrollSummaryCard(
-                            'Eligible Employees · Selected Branch',
+                            'Eligible Employees · Selected Month',
                             employees
                                 .where((employee) =>
                                     PayrollMonthScope.activeInMonth(
@@ -16399,7 +16280,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                       const SizedBox(height: 8),
                       Text(
                         '${DateFormat('MMMM yyyy').format(selectedPayrollMonth)} · '
-                        '${selectedPayrollBranchId == null ? 'All branches' : branchNames[selectedPayrollBranchId] ?? selectedPayrollBranchId}',
+                        'RK Success Sdn Bhd',
                         style: const TextStyle(color: Colors.black54),
                       ),
                       const SizedBox(height: 20),
