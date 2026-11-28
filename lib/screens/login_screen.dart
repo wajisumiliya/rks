@@ -25,7 +25,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool obscurePassword = true;
   bool loading = false;
   bool _lightsOn = false;
-  late final _towerColors = AnimationController(
+  late final _towerLighting = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 4),
   );
@@ -33,7 +33,7 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _animateSignIn(dynamic user) async {
     if (!mounted || _lightsOn) return;
     setState(() {
-      _towerColors.stop();
+      _towerLighting.stop();
       _lightsOn = true;
       loading = true;
     });
@@ -68,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   void dispose() {
-    _towerColors.dispose();
+    _towerLighting.dispose();
     usernameController.dispose();
     passwordController.dispose();
     super.dispose();
@@ -285,7 +285,7 @@ class _LoginScreenState extends State<LoginScreen>
       errorMessage = null;
     });
     if (!MediaQuery.disableAnimationsOf(context)) {
-      _towerColors.repeat();
+      _towerLighting.repeat(reverse: true);
     }
 
     try {
@@ -375,7 +375,7 @@ class _LoginScreenState extends State<LoginScreen>
             'Please check your connection and try again.';
       });
     } finally {
-      if (mounted) _towerColors.stop();
+      if (mounted) _towerLighting.stop();
     }
   }
 
@@ -676,7 +676,7 @@ class _LoginScreenState extends State<LoginScreen>
                 painter: _OfficeLighting(
                   light,
                   loading && !_lightsOn,
-                  _towerColors,
+                  _towerLighting,
                 ),
               ),
             ),
@@ -844,11 +844,10 @@ class _OfficeLighting extends CustomPainter {
     }
 
     if (processing) {
-      final hue = (colors.value * 360 + 195) % 360;
-      final left = HSVColor.fromAHSV(1, hue, .62, 1).toColor();
-      final right = HSVColor.fromAHSV(1, (hue + 55) % 360, .62, 1).toColor();
-      glow(.347, .225, .085, left, .75);
-      glow(.374, .24, .085, right, .75);
+      final intensity = .12 + .20 * Curves.easeInOut.transform(colors.value);
+      const warmWhite = Color(0xFFFFEBD1);
+      glow(.347, .225, .055, warmWhite, intensity);
+      glow(.374, .24, .055, warmWhite, intensity);
     }
 
     glow(.205, .344, .19, const Color(0xFFFFC674), light * .54);
