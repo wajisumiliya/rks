@@ -16129,13 +16129,6 @@ class _AdminDashboardState extends State<AdminDashboard>
                   .toLowerCase()
                   .compareTo(b['employee_name'].toString().toLowerCase());
         });
-        final monthlyIncrements = selectedPayrollBranchId == null
-            ? allMonthlyIncrements
-            : allMonthlyIncrements
-                .where(
-                  (item) => item['branch_id'] == selectedPayrollBranchId,
-                )
-                .toList();
 
         double totalPayroll = 0;
         for (final payroll in visiblePayrollRecords) {
@@ -16219,49 +16212,6 @@ class _AdminDashboardState extends State<AdminDashboard>
                       icon: const Icon(Icons.publish_outlined),
                       label: const Text('Publish Payslips'),
                     ),
-                    _payrollActionMenu(
-                        'Allowances & Bonus', Icons.card_giftcard_outlined, [
-                      MenuItemButton(
-                        onPressed: () => showDialog<void>(
-                          context: context,
-                          builder: (_) => AttendanceAllowanceReportDialog(
-                            initialMonth: selectedPayrollMonth,
-                            load: (month) =>
-                                service.loadAttendanceAllowanceReport(
-                              month,
-                              branchId: selectedPayrollBranchId,
-                            ),
-                          ),
-                        ),
-                        leadingIcon: const Icon(Icons.receipt_long_outlined),
-                        child: const Text('Attendance Allowance Deductions'),
-                      ),
-                      MenuItemButton(
-                        onPressed: () => showDialog<void>(
-                          context: context,
-                          builder: (_) => BonusReportDialog(
-                            initialMonth: selectedPayrollMonth,
-                            load: (month) => service.loadBonusReport(month,
-                                branchId: selectedPayrollBranchId),
-                          ),
-                        ),
-                        leadingIcon: const Icon(Icons.card_giftcard_outlined),
-                        child: const Text('Bonus Recipients'),
-                      ),
-                    ]),
-                    _payrollActionMenu(
-                        'Increments', Icons.trending_up_outlined, [
-                      MenuItemButton(
-                        onPressed: monthlyIncrements.isEmpty
-                            ? null
-                            : () => _showPayrollIncrementComparisonDialog(
-                                  month: selectedPayrollMonth,
-                                  increments: monthlyIncrements,
-                                ),
-                        leadingIcon: const Icon(Icons.compare_arrows_outlined),
-                        child: const Text('Compare Increments'),
-                      ),
-                    ]),
                     _payrollActionMenu(
                         'Import & Export', Icons.import_export_outlined, [
                       MenuItemButton(
