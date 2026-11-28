@@ -1029,7 +1029,8 @@ class _AdminDashboardState extends State<AdminDashboard>
                 if (const bool.fromEnvironment('ENABLE_SALARY_REPORT'))
                   item('Salary Report', Icons.table_chart_outlined, 20),
               item('Employee Payslips', Icons.badge_rounded, 12),
-              item('EA Forms', Icons.description_rounded, 15),
+              if (const bool.fromEnvironment('ENABLE_EA_FORMS'))
+                item('EA Forms', Icons.description_rounded, 15),
               PremiumPortalSidebarItem(
                 label: 'Edit Payroll',
                 icon: Icons.edit_document,
