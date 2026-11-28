@@ -681,6 +681,27 @@ class _LoginScreenState extends State<LoginScreen>
               ),
             ),
           ),
+          if (wide)
+            Positioned(
+              top: 24,
+              left: 24,
+              child: SafeArea(
+                child: Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Image.asset(
+                      'assets/hasani_books_logo.jpg',
+                      width: 160,
+                      height: 88,
+                      fit: BoxFit.contain,
+                      semanticLabel: 'RK Success Sdn Bhd',
+                    ),
+                  ),
+                ),
+              ),
+            ),
           SafeArea(
         child: Align(
           alignment: wide ? const Alignment(.72, 0) : Alignment.center,
@@ -707,8 +728,8 @@ class _LoginScreenState extends State<LoginScreen>
                                 alignment: Alignment.centerLeft,
                                 child: Image.asset(
                                   'assets/hasani_books_logo.jpg',
-                                  width: 210,
-                                    height: 48,
+                                  width: 250,
+                                  height: 120,
                                     semanticLabel: 'RK Success',
                                   fit: BoxFit.contain,
                                 ),

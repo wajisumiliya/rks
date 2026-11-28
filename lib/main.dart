@@ -49,7 +49,7 @@ class HasaniPayrollApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Company Payroll',
+      title: 'RKS',
       debugShowCheckedModeBanner: false,
       builder: (context, child) => PlayUpdateGate(
         child: child ?? const SizedBox.shrink(),
