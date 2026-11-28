@@ -1039,8 +1039,8 @@ class _AdminDashboardState extends State<AdminDashboard>
               ),
               item('RHB Layout', Icons.account_balance_rounded, 8),
               item('Reports', Icons.bar_chart_rounded, 6),
-              item('Settings', Icons.settings_rounded, 7),
-              item('Branch Passwords', Icons.password_rounded, 17),
+
+
             ],
       onLogout: logout,
     );
