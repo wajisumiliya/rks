@@ -16,7 +16,8 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final AppService service = AppService.instance;
   final usernameController = TextEditingController();
   final passwordController = TextEditingController();
@@ -24,10 +25,15 @@ class _LoginScreenState extends State<LoginScreen> {
   bool obscurePassword = true;
   bool loading = false;
   bool _lightsOn = false;
+  late final _towerColors = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 4),
+  );
 
   Future<void> _animateSignIn(dynamic user) async {
     if (!mounted || _lightsOn) return;
     setState(() {
+      _towerColors.stop();
       _lightsOn = true;
       loading = true;
     });
@@ -62,6 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _towerColors.dispose();
     usernameController.dispose();
     passwordController.dispose();
     super.dispose();
@@ -277,6 +284,9 @@ class _LoginScreenState extends State<LoginScreen> {
       loading = true;
       errorMessage = null;
     });
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      _towerColors.repeat();
+    }
 
     try {
       final result = await service.login(
@@ -364,6 +374,8 @@ class _LoginScreenState extends State<LoginScreen> {
         errorMessage = 'Unable to connect to the payroll server. '
             'Please check your connection and try again.';
       });
+    } finally {
+      if (mounted) _towerColors.stop();
     }
   }
 
@@ -661,7 +673,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   : const Duration(milliseconds: 680),
               curve: Curves.easeOutCubic,
               builder: (context, light, _) => CustomPaint(
-                painter: _OfficeLighting(light),
+                painter: _OfficeLighting(
+                  light,
+                  loading && !_lightsOn,
+                  _towerColors,
+                ),
               ),
             ),
           ),
@@ -793,9 +809,12 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 class _OfficeLighting extends CustomPainter {
-  const _OfficeLighting(this.light);
+  _OfficeLighting(this.light, this.processing, this.colors)
+      : super(repaint: colors);
 
   final double light;
+  final bool processing;
+  final Animation<double> colors;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -808,7 +827,7 @@ class _OfficeLighting extends CustomPainter {
       BlendMode.srcOver,
     );
 
-    void glow(double x, double y, double radius, Color color, double strength) {
+    void glow(double x, double y, double radius, Color color, double opacity) {
       final center = origin + Offset(width * x, height * y);
       final area = Rect.fromCircle(center: center, radius: height * radius);
       canvas.drawOval(
@@ -817,18 +836,26 @@ class _OfficeLighting extends CustomPainter {
           ..blendMode = BlendMode.screen
           ..shader = RadialGradient(
             colors: [
-              color.withValues(alpha: light * strength),
+              color.withValues(alpha: opacity),
               color.withValues(alpha: 0),
             ],
           ).createShader(area),
       );
     }
 
-    glow(.205, .344, .19, const Color(0xFFFFC674), .54);
-    glow(.35, .208, .11, const Color(0xFFF4DEAA), .52);
-    glow(.367, .269, .15, const Color(0xFFFFE8B7), .32);
+    if (processing) {
+      final hue = (colors.value * 360 + 195) % 360;
+      final left = HSVColor.fromAHSV(1, hue, .62, 1).toColor();
+      final right = HSVColor.fromAHSV(1, (hue + 55) % 360, .62, 1).toColor();
+      glow(.347, .225, .085, left, .75);
+      glow(.374, .24, .085, right, .75);
+    }
+
+    glow(.205, .344, .19, const Color(0xFFFFC674), light * .54);
+    glow(.35, .208, .11, const Color(0xFFF4DEAA), light * .52);
+    glow(.367, .269, .15, const Color(0xFFFFE8B7), light * .32);
   }
 
   @override
-  bool shouldRepaint(_OfficeLighting oldDelegate) => light != oldDelegate.light;
+  bool shouldRepaint(_OfficeLighting oldDelegate) => light != oldDelegate.light || processing != oldDelegate.processing;
 }
