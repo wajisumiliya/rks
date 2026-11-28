@@ -671,7 +671,9 @@ class AdminActivityCards extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
+  Widget build(BuildContext context) => !lateOnly
+      ? const SizedBox.shrink()
+      : FutureBuilder<Map<String, dynamic>>(
       future: activity,
       builder: (_, snapshot) {
         final metrics = AdminOverviewMetrics(
@@ -732,46 +734,42 @@ class AdminActivityCards extends StatelessWidget {
           ];
         }
 
-        final cards = [
-          card(context,
-              title: 'Upcoming Birthdays',
-              subtitle: 'Employees celebrating their birthday',
-              color: gold,
-              icon: Icons.cake,
-              totals: eventStats(birthdays, false),
-              rows: birthdays,
-              headers: ['Birthday', 'Days Left'],
+        return card(context,
+              title: 'Attendance Late (3 and above)',
+              subtitle: 'Main late + excess breaks: 3 or more occurrences',
+              color: pink,
+              icon: Icons.alarm,
+              totals: [
+                (
+                  Icons.groups,
+                  '${late?.length ?? '—'}',
+                  'Total Late (≥3)',
+                  pink
+                ),
+                (
+                  Icons.warning,
+                  '${totalDays ?? '—'}',
+                  'Total Occurrences',
+                  pink
+                ),
+                (
+                  Icons.person,
+                  '$count',
+                  'Total Employees',
+                  const Color(0xFF008CB5)
+                ),
+                (Icons.pie_chart, rate, 'Late Rate', gold)
+              ],
+              rows: late,
+              headers: ['Main + Break', 'Late Minutes'],
               values: (r) => [
-                    DateFormat('d MMM yyyy').format(r['event'] as DateTime),
-                    r['days'] == 0 ? 'Today' : '${r['days']} days'
+                    '${combinedCount(r)} (M${issueCount(r, 'arrival')}/B${issueCount(r, 'break')})',
+                    'Main ${recordedMinutesLabel(r, 'arrival')}\nBreak ${recordedMinutesLabel(r, 'break')}'
                   ],
-              note: 'Shows upcoming birthdays within the next 5 days.',
-              upcoming: true),
-          card(context,
-              title: 'Work Anniversary',
-              subtitle: 'Employees celebrating their service anniversary',
-              color: blue,
-              icon: Icons.star,
-              totals: eventStats(anniversaries, true),
-              rows: anniversaries,
-              headers: ['Joined Date', 'Years'],
-              values: (r) => [
-                    DateFormat('d MMM yyyy').format(r['original'] as DateTime),
-                    '${r['years']} years'
-                  ],
-              note: 'Shows work anniversaries within the next 5 days.',
-              upcoming: true)
-        ];
-        if (lateOnly) return cards.first;
-        return LayoutBuilder(
-            builder: (_, c) => Wrap(spacing: 16, runSpacing: 12, children: [
-                  for (final item in cards)
-                    SizedBox(
-                        width: c.maxWidth >= 1100
-                            ? (c.maxWidth - 16) / 2
-                            : c.maxWidth,
-                        child: item)
-                ]));
+              note: late == null
+                  ? 'Late attendance data unavailable.'
+                  : 'Showing ${math.min(5, late.length)} of ${late.length} employees · ${late.map((r) => canonical(r["branch_id"])).toSet().length} branches · 3+ main + break occurrences.',
+              late: true);
       });
 }
 
