@@ -5034,7 +5034,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                   _adminEmployeePage = 0;
                 }),
                 decoration: InputDecoration(
-                  hintText: 'Search employee, department or branch',
+                  hintText: 'Search employee or department',
                   isDense: true,
                   filled: true,
                   fillColor: Colors.white,
@@ -5270,14 +5270,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                                                 title: Text('Edit'),
                                               ),
                                             ),
-                                            PopupMenuItem(
-                                              value: 'transfer',
-                                              child: ListTile(
-                                                leading: Icon(Icons.swap_horiz,
-                                                    color: Colors.orange),
-                                                title: Text('Transfer'),
-                                              ),
-                                            ),
+
                                             PopupMenuItem(
                                               value: 'login',
                                               child: ListTile(
@@ -5346,14 +5339,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                                                 }
                                               },
                                               itemBuilder: (_) => const [
-                                                PopupMenuItem(
-                                                  value: 'transfer',
-                                                  child: ListTile(
-                                                    leading:
-                                                        Icon(Icons.swap_horiz),
-                                                    title: Text('Transfer'),
-                                                  ),
-                                                ),
+
                                                 PopupMenuItem(
                                                   value: 'login',
                                                   child: ListTile(
@@ -5481,12 +5467,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                         const Color(0xFF168CE5),
                         () => _showSupabaseEmployeeEdit(employee),
                       ),
-                      _employeeGridAction(
-                        'Transfer',
-                        Icons.swap_horiz_rounded,
-                        const Color(0xFFF08A00),
-                        () => _showTransferEmployee(employee),
-                      ),
+
                       _employeeGridAction(
                         'Application login',
                         Icons.manage_accounts_rounded,
@@ -5714,10 +5695,6 @@ class _AdminDashboardState extends State<AdminDashboard>
     final elaunMakanan = TextEditingController(text: '0');
     final zakat = TextEditingController(text: '0');
 
-    String branchId =
-        service.branches.isNotEmpty ? service.branches.first.id : '';
-    String payrollBranchId = '';
-
     DateTime joiningDate = DateTime.now();
     DateTime? birthday;
     String employmentStatus = 'active';
@@ -5935,62 +5912,8 @@ class _AdminDashboardState extends State<AdminDashboard>
                       sectionHeading(
                         Icons.work_outline,
                         'Employment Details',
-                        'Branch assignment, dates and initial status.',
+                        'Joining date and initial employment status.',
                       ),
-                      if (service.branches.isNotEmpty)
-                        DropdownButtonFormField<String>(
-                          initialValue: branchId,
-                          decoration: const InputDecoration(
-                            labelText: 'Branch *',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: service.branches.map(
-                            (branch) {
-                              return DropdownMenuItem<String>(
-                                value: branch.id,
-                                child: Text(
-                                  branch.name,
-                                ),
-                              );
-                            },
-                          ).toList(),
-                          onChanged: (value) {
-                            if (value == null) return;
-
-                            setDialogState(() {
-                              branchId = value;
-                            });
-                          },
-                        ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        initialValue: payrollBranchId,
-                        decoration: const InputDecoration(
-                          labelText: 'Payroll Branch',
-                          helperText:
-                              'Used for payroll only. Leave unchanged to use the attendance branch.',
-                          helperMaxLines: 2,
-                          border: OutlineInputBorder(),
-                        ),
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: '',
-                            child: Text('Same as attendance branch'),
-                          ),
-                          ...service.branches.map(
-                            (branch) => DropdownMenuItem<String>(
-                              value: branch.id,
-                              child: Text(branch.name),
-                            ),
-                          ),
-                        ],
-                        onChanged: saving
-                            ? null
-                            : (value) => setDialogState(
-                                  () => payrollBranchId = value ?? '',
-                                ),
-                      ),
-                      const SizedBox(height: 15),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Birthday'),
@@ -6105,7 +6028,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Management Staff'),
                         subtitle: const Text(
-                          'Hidden from branch attendance; payroll uses salary defaults only.',
+                          'Hidden from attendance; payroll uses salary defaults only.',
                         ),
                         value: managementStaff,
                         onChanged: (value) => setDialogState(() {
@@ -6121,7 +6044,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Temporary Staff'),
                         subtitle: const Text(
-                          'Payroll only; hidden from branch attendance.',
+                          'Payroll only; hidden from attendance.',
                         ),
                         value: tempStaff,
                         onChanged: (value) => setDialogState(() {
@@ -6137,7 +6060,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Support Staff'),
                         subtitle: const Text(
-                          'Payroll only; hidden from branch attendance.',
+                          'Payroll only; hidden from attendance.',
                         ),
                         value: supportStaff,
                         onChanged: (value) => setDialogState(() {
@@ -6188,10 +6111,9 @@ class _AdminDashboardState extends State<AdminDashboard>
 
                           if (id.isEmpty ||
                               employeeName.isEmpty ||
-                              employeeDepartment.isEmpty ||
-                              branchId.trim().isEmpty) {
+                              employeeDepartment.isEmpty) {
                             _message(
-                              'Employee ID, full name, department and branch are required.',
+                              'Employee ID, full name and department are required.',
                             );
                             return;
                           }
@@ -6242,6 +6164,33 @@ class _AdminDashboardState extends State<AdminDashboard>
                           setDialogState(() => saving = true);
                           final active = employmentStatus == 'active' ||
                               employmentStatus == 'vacation';
+                          late final String branchId;
+                          try {
+                            final offices = await service.loadNeonBranches();
+                            final ids = offices
+                                .map(_branchIdFromMap)
+                                .where((id) => id.isNotEmpty)
+                                .toList();
+                            if (ids.isEmpty) {
+                              await SupabaseService.database.from('branches').upsert(
+                                {'id': 'RKS', 'name': 'RK Success Sdn Bhd'},
+                                onConflict: 'id',
+                                ignoreDuplicates: true,
+                              );
+                              branchId = 'RKS';
+                            } else {
+                              branchId = ids.contains('RKS')
+                                  ? 'RKS'
+                                  : ids.firstWhere((id) => id == 'RKS-TEST',
+                                      orElse: () => ids.first);
+                            }
+                          } catch (error) {
+                            if (!dialogContext.mounted) return;
+                            setDialogState(() => saving = false);
+                            _message('Unable to load company setup: $error');
+                            return;
+                          }
+                          if (!dialogContext.mounted) return;
                           final result = await service.addEmployee(
                             Employee(
                               employeeId: id,
@@ -6268,9 +6217,6 @@ class _AdminDashboardState extends State<AdminDashboard>
                             ),
                             branchId: branchId,
                             employmentStatus: employmentStatus,
-                            payrollBranchId: payrollBranchId.isEmpty
-                                ? null
-                                : payrollBranchId,
                             salaryDefaults: {
                               'basic_salary': parsedBasicSalary!,
                               'fw_salary': parsedFwSalary!,
@@ -6346,7 +6292,7 @@ class _AdminDashboardState extends State<AdminDashboard>
       text: employee.address,
     );
 
-    String branchId = employee.branchId;
+    final branchId = employee.branchId;
 
     DateTime joiningDate = employee.joiningDate ?? DateTime.now();
     DateTime? birthday = employee.birthday;
@@ -6425,34 +6371,6 @@ class _AdminDashboardState extends State<AdminDashboard>
                         address,
                         'Address',
                       ),
-                      if (service.branches.isNotEmpty)
-                        DropdownButtonFormField<String>(
-                          initialValue: service.branches.any(
-                            (branch) => branch.id == branchId,
-                          )
-                              ? branchId
-                              : service.branches.first.id,
-                          decoration: const InputDecoration(
-                            labelText: 'Branch',
-                          ),
-                          items: service.branches.map(
-                            (branch) {
-                              return DropdownMenuItem<String>(
-                                value: branch.id,
-                                child: Text(
-                                  branch.name,
-                                ),
-                              );
-                            },
-                          ).toList(),
-                          onChanged: (value) {
-                            if (value == null) return;
-
-                            setDialogState(() {
-                              branchId = value;
-                            });
-                          },
-                        ),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Birthday'),
@@ -6512,7 +6430,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Management Staff'),
                         subtitle: const Text(
-                          'Hidden from branch attendance; salary-default payroll only.',
+                          'Hidden from attendance; salary-default payroll only.',
                         ),
                         value: managementStaff,
                         onChanged: (value) => setDialogState(() {
@@ -6528,7 +6446,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Temporary Staff'),
                         subtitle: const Text(
-                          'Payroll only; hidden from branch attendance.',
+                          'Payroll only; hidden from attendance.',
                         ),
                         value: tempStaff,
                         onChanged: (value) => setDialogState(() {
@@ -6544,7 +6462,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Support Staff'),
                         subtitle: const Text(
-                          'Payroll only; hidden from branch attendance.',
+                          'Payroll only; hidden from attendance.',
                         ),
                         value: supportStaff,
                         onChanged: (value) => setDialogState(() {
@@ -7083,17 +7001,6 @@ class _AdminDashboardState extends State<AdminDashboard>
                       employee['joining_date'],
                     ),
                     _employeeDetail(
-                      'Branch',
-                      employee['branch_id'],
-                    ),
-                    _employeeDetail(
-                      'Payroll Branch',
-                      _normalizeBranchValue(employee['payroll_branch_id'])
-                              .isEmpty
-                          ? 'Same as attendance branch'
-                          : employee['payroll_branch_id'],
-                    ),
-                    _employeeDetail(
                       'Employee Category',
                       employee['is_management_staff'] == true
                           ? 'Management Staff'
@@ -7474,16 +7381,6 @@ class _AdminDashboardState extends State<AdminDashboard>
         employee['is_support_staff']?.toString().toLowerCase() == 'true';
     var otherStaff = employee['is_other_staff'] == true ||
         employee['is_other_staff']?.toString().toLowerCase() == 'true';
-    String payrollBranchId =
-        _normalizeBranchValue(employee['payroll_branch_id']);
-    final payrollBranches = <String, String>{};
-    for (final branch in service.branches) {
-      final id = _normalizeBranchValue(branch.id);
-      if (id.isNotEmpty) payrollBranches.putIfAbsent(id, () => branch.name);
-    }
-    if (payrollBranchId.isNotEmpty) {
-      payrollBranches.putIfAbsent(payrollBranchId, () => payrollBranchId);
-    }
     var saving = false;
     Widget sectionHeading(IconData icon, String title, String subtitle) =>
         Padding(
@@ -7771,40 +7668,6 @@ class _AdminDashboardState extends State<AdminDashboard>
                                 setDialogState(() => joiningDate = value);
                               }
                             }),
-                  TextFormField(
-                      initialValue: employee['branch_id']?.toString() ?? '',
-                      enabled: false,
-                      decoration: const InputDecoration(
-                          labelText: 'Branch',
-                          helperText:
-                              'Use Transfer Staff to change branch and retain history.')),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    initialValue: payrollBranchId,
-                    decoration: const InputDecoration(
-                      labelText: 'Payroll Branch',
-                      helperText:
-                          'Used for payroll lists and exports only. Attendance branch is unchanged.',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: [
-                      const DropdownMenuItem<String>(
-                        value: '',
-                        child: Text('Same as attendance branch'),
-                      ),
-                      ...payrollBranches.entries.map(
-                        (branch) => DropdownMenuItem<String>(
-                          value: branch.key,
-                          child: Text(branch.value),
-                        ),
-                      ),
-                    ],
-                    onChanged: saving
-                        ? null
-                        : (value) => setDialogState(
-                              () => payrollBranchId = value ?? '',
-                            ),
-                  ),
                   const SizedBox(height: 18),
                   const Align(
                     alignment: Alignment.centerLeft,
@@ -7903,7 +7766,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                     value: managementStaff,
                     title: const Text('Management Staff'),
                     subtitle: const Text(
-                      'Hidden from branch attendance; salary-default payroll only.',
+                      'Hidden from attendance; salary-default payroll only.',
                     ),
                     onChanged: saving
                         ? null
@@ -7921,7 +7784,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                     value: tempStaff,
                     title: const Text('Temporary Staff'),
                     subtitle: const Text(
-                      'Payroll only; hidden from branch attendance.',
+                      'Payroll only; hidden from attendance.',
                     ),
                     onChanged: saving
                         ? null
@@ -7939,7 +7802,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                     value: supportStaff,
                     title: const Text('Support Staff'),
                     subtitle: const Text(
-                      'Payroll only; hidden from branch attendance.',
+                      'Payroll only; hidden from attendance.',
                     ),
                     onChanged: saving
                         ? null
@@ -8130,9 +7993,6 @@ class _AdminDashboardState extends State<AdminDashboard>
                             'is_temp_staff': tempStaff,
                             'is_support_staff': supportStaff,
                             'is_other_staff': otherStaff,
-                            'payroll_branch_id': payrollBranchId.isEmpty
-                                ? null
-                                : payrollBranchId,
                           };
                           await SupabaseService.updateEmployee(
                               employee['employee_id'], employeePayload);
