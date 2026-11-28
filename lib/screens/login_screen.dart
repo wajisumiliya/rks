@@ -850,36 +850,10 @@ class _OfficeLighting extends CustomPainter {
       glow(.374, .24, .055, warmWhite, intensity);
     }
 
-    final lampOn = processing || light > 0;
-    if (!lampOn) {
-      // Screen-space masks follow the bulb and its reflection under BoxFit.cover.
-      final bulb = Rect.fromCenter(
-        center: origin + Offset(width * .205, height * .344),
-        width: width * .070,
-        height: height * .043,
-      );
-      final desk = Rect.fromCenter(
-        center: origin + Offset(width * .15, height * .67),
-        width: width * .36,
-        height: height * .42,
-      );
-      canvas.drawOval(
-        desk,
-        Paint()
-          ..shader = const RadialGradient(
-            colors: [Color(0x960A1019), Color(0x000A1019)],
-          ).createShader(desk),
-      );
-      canvas.drawOval(
-        bulb,
-        Paint()
-          ..shader = const RadialGradient(
-            colors: [Color(0xFF211C17), Color(0xFF211C17), Color(0x00211C17)],
-            stops: [0, .76, 1],
-          ).createShader(bulb),
-      );
-    } else {
-      glow(.205, .344, .15, const Color(0xFFFFC674), .27 + light * .27);
+    if (processing || light > 0) {
+      glow(.204, .348, .047, const Color(0xFFFFE3B2), .76);
+      glow(.203, .382, .13, const Color(0xFFFFC674), .18 + light * .12);
+      glow(.202, .642, .24, const Color(0xFFFFCC8A), .12 + light * .10);
     }
     glow(.35, .208, .11, const Color(0xFFF4DEAA), light * .52);
     glow(.367, .269, .15, const Color(0xFFFFE8B7), light * .32);
