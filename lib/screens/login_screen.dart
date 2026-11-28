@@ -23,6 +23,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool obscurePassword = true;
   bool loading = false;
+  bool _lightsOn = false;
+
+  Future<void> _animateSignIn(dynamic user) async {
+    if (!mounted || _lightsOn) return;
+    setState(() {
+      _lightsOn = true;
+      loading = true;
+    });
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      await Future<void>.delayed(const Duration(milliseconds: 950));
+    }
+    if (mounted) _openCorrectPortal(user);
+  }
   String? errorMessage;
 
   @override
@@ -341,7 +354,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       if (!mounted) return;
-      _openCorrectPortal(user);
+      await _animateSignIn(user);
     } catch (_) {
       if (!mounted) return;
 
@@ -431,7 +444,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   } catch (_) {
                     // Notification setup must not block first-login completion.
                   }
-                  if (mounted) _openCorrectPortal(user);
+                  await _animateSignIn(user);
                 }
               }
 
@@ -640,6 +653,18 @@ class _LoginScreenState extends State<LoginScreen> {
             alignment: Alignment.centerRight,
             excludeFromSemantics: true,
           ),
+          IgnorePointer(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0, end: _lightsOn ? 1 : 0),
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 680),
+              curve: Curves.easeOutCubic,
+              builder: (context, light, _) => CustomPaint(
+                painter: _OfficeLighting(light),
+              ),
+            ),
+          ),
           SafeArea(
         child: Align(
           alignment: wide ? const Alignment(.72, 0) : Alignment.center,
@@ -765,4 +790,45 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+}
+
+class _OfficeLighting extends CustomPainter {
+  const _OfficeLighting(this.light);
+
+  final double light;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Match the background image's 2:1 aspect ratio and center-right cover.
+    final width = size.width > size.height * 2 ? size.width : size.height * 2;
+    final height = width / 2;
+    final origin = Offset(size.width - width, (size.height - height) / 2);
+    canvas.drawColor(
+      Colors.black.withValues(alpha: .38 * (1 - light)),
+      BlendMode.srcOver,
+    );
+
+    void glow(double x, double y, double radius, Color color, double strength) {
+      final center = origin + Offset(width * x, height * y);
+      final area = Rect.fromCircle(center: center, radius: height * radius);
+      canvas.drawOval(
+        area,
+        Paint()
+          ..blendMode = BlendMode.screen
+          ..shader = RadialGradient(
+            colors: [
+              color.withValues(alpha: light * strength),
+              color.withValues(alpha: 0),
+            ],
+          ).createShader(area),
+      );
+    }
+
+    glow(.205, .344, .19, const Color(0xFFFFC674), .54);
+    glow(.35, .208, .11, const Color(0xFFF4DEAA), .52);
+    glow(.367, .269, .15, const Color(0xFFFFE8B7), .32);
+  }
+
+  @override
+  bool shouldRepaint(_OfficeLighting oldDelegate) => light != oldDelegate.light;
 }
